@@ -1,0 +1,1 @@
+A thread-safe map that expires entries. Optional features include expiration policies, variable entry settings, and expiration listeners.
