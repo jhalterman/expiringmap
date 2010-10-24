@@ -17,8 +17,6 @@ import com.jhalt.expiringmap.ExpiringMap.ExpiringEntry;
 
 /**
  * Tests {@link ExpiringEntry}.
- * 
- * @author Jonathan Halterman
  */
 public class ExpiringMapEntryTest {
     /**

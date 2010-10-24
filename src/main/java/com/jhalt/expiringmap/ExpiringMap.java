@@ -27,15 +27,19 @@ import java.util.concurrent.atomic.AtomicReference;
  * A thread-safe map that expires entries. Optional features include expiration policies, variable
  * entry settings, and expiration listeners.
  * 
- * <p>Entries are tracked by expiration time and expired by a single static {@link Timer}.
+ * <p>
+ * Entries are tracked by expiration time and expired by a single static {@link Timer}.
  * 
- * <p>Expiration listeners will automatically be assigned to run in the context of the Timer thread
- * or in a separate thread based on their first timed duration.
+ * <p>
+ * Expiration listeners will automatically be assigned to run in the context of the Timer thread or
+ * in a separate thread based on their first timed duration.
  * 
- * <p>When variable expiration is disabled (default), put/remove operations are constant. When
- * variable expiration is enabled, put/remove operations impose a <i>log(n)</i> cost.
+ * <p>
+ * When variable expiration is disabled (default), put/remove operations are constant. When variable
+ * expiration is enabled, put/remove operations impose a <i>log(n)</i> cost.
  * 
- * <p>Example usages:
+ * <p>
+ * Example usages:
  * 
  * <pre> 
  * Map<String, Integer> map = ExpiringMap.create(); 
@@ -48,10 +52,6 @@ import java.util.concurrent.atomic.AtomicReference;
  *          })
  *      .build(); 
  * </pre>
- * 
- * TODO Implement ConcurrentMap interface 
- * TODO Handle case where successive entries expire faster than an expiration listener returns. 
- * Perhaps use Iterator<AbstractMap.SimpleEntry<K, V>>.
  * 
  * @author Jonathan Halterman
  * @param <K> Key type
@@ -188,6 +188,8 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     /** Entry LinkedHashMap implementation. */
     static class EntryLinkedHashMap<K, V> extends LinkedHashMap<K, ExpiringEntry<K, V>> implements
             EntryMap<K, V> {
+        private static final long serialVersionUID = 1L;
+
         /** {@inheritDoc} */
         public ExpiringEntry<K, V> first() {
             return isEmpty() ? null : values().iterator().next();
@@ -208,6 +210,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     /** Entry TreeHashMap implementation. */
     static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>> implements
             EntryMap<K, V> {
+        private static final long serialVersionUID = 1L;
         SortedSet<ExpiringEntry<K, V>> sortedSet = new TreeSet<ExpiringEntry<K, V>>();
 
         /** {@inheritDoc} */
@@ -245,7 +248,6 @@ public class ExpiringMap<K, V> implements Map<K, V> {
                 /** {@inheritDoc} */
                 public ExpiringEntry<K, V> next() {
                     next = iterator.next();
-
                     return next;
                 }
 
@@ -261,7 +263,6 @@ public class ExpiringMap<K, V> implements Map<K, V> {
         @Override
         public ExpiringEntry<K, V> put(K key, ExpiringEntry<K, V> value) {
             sortedSet.add(value);
-
             return super.put(key, value);
         }
 
@@ -328,7 +329,6 @@ public class ExpiringMap<K, V> implements Map<K, V> {
          */
         synchronized boolean cancel(boolean resetExpiration) {
             boolean result = scheduled;
-
             if (timerTask != null)
                 timerTask.cancel();
 
@@ -337,7 +337,6 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
             if (resetExpiration)
                 resetExpiration();
-
             return result;
         }
 
@@ -437,7 +436,6 @@ public class ExpiringMap<K, V> implements Map<K, V> {
             else {
                 long startTime = System.currentTimeMillis();
                 listener.expirationListener.expired(entry.key, entry.getValue());
-
                 long endTime = System.currentTimeMillis();
                 listener.executionPolicy = startTime + LISTENER_EXECUTION_THRESHOLD > endTime ? 0
                         : 1;
@@ -456,7 +454,6 @@ public class ExpiringMap<K, V> implements Map<K, V> {
             return;
 
         TimerTask timerTask = null;
-
         synchronized (entry) {
             if (entry.scheduled)
                 return;

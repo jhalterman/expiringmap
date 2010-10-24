@@ -20,8 +20,6 @@ import com.jhalt.expiringmap.ExpiringMap.ExpirationPolicy;
 
 /**
  * Tests {@link ExpiringMap}.
- * 
- * @author Jonathan Halterman
  */
 public class ExpiringMapTest extends ConcurrentTestCase {
     private static final int VALUE_PREFIX = 12345;
