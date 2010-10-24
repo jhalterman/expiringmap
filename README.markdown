@@ -1,18 +1,18 @@
-# ExpiringMap 0.0.1
+# ExpiringMap 0.1.0
 
 ## Introduction
 
-ExpiringMap is a high performance low-overhead thread-safe map that expires entries. Optional features include expiration policies, variable entry settings, and expiration listeners.
+ExpiringMap is a high performance, low-overhead, thread-safe map that expires entries. Optional features include expiration policies, variable entry settings, and expiration listeners.
 
 ## Motivation
 
-In early 2009, my team came across the need for a simple map capable of expiring entries. After surveying the options available at the time and running some tests against them, we were surprised to find that none of the candidates provided what we were looking for: thread-safety, fast expiration, and low overhead. 
+In early 2009 my team came across the need for a simple map capable of expiring entries. After surveying the options available at the time and running some tests against them, we were surprised to find that none of the candidates provided what we were looking for: thread-safety, fast expiration, and low overhead. 
 
 While my project was utilizing Google Collections, its expirable map entry implementation was still primitive and not suitable for heavy use. So I decided to create ExpiringMap.
 
 The expiring map implementations I surveyed invariably utilized polling, numerous threads, or one TimerTask per entry. Thus, ExpiringMap was designed to perform accurate expiration while utilizing single Timer thread and TimerTask.
 
-Since the initial creation of ExpiringMap, Kevin Bourrillion at Google has rewritten Guava's MapMaker expiration implementation to use an approach similar to that of ExpiringMap and enhanced it to include some of the same features. 
+Though ExpiringMap was created at a time when no comparable alternatives existed, Kevin Bourrillion at Google recently rewrote Guava's MapMaker implementation to use an entry expiration approach similar to that of ExpiringMap, additionally enhancing it to include some of the same features. Going forward, either implementation is suitable for high performance use.
 
 ## Usage
 
