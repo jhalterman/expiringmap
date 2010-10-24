@@ -1,69 +1,65 @@
-# ConcurrentUnit 0.0.1
-
-A simple concurrent JUnit test case extension.
+# ExpiringMap 0.0.1
 
 ## Introduction
 
-ConcurrentUnit allows you to write test cases capable of performing concurrent assertions or waiting for expected operations with failures being properly reported back to the main test thread.
+ExpiringMap is a high performance low-overhead thread-safe map that expires entries. Optional features include expiration policies, variable entry settings, and expiration listeners.
+
+## Motivation
+
+In early 2009, my team came across the need for a simple map capable of expiring entries. After surveying the options available at the time and running some tests against them, we were surprised to find that none of the candidates provided what we were looking for: thread-safety, fast expiration, and low overhead. While my project was utilizing Google Collections, its expirable map entry implementation was still primitive and not suitable for heavy use. So I decided to create ExpiringMap.
+
+While other expiring map implementations invariably utilized polling, numerous threads, or one TimerTask per entry, ExpiringMap was designed to use a single Timer thread and TimerTask.
+
+Since the initial creation of ExpiringMap, Kevin Bourrillion at Google has rewritten the Guava's (Google Collections) MapMaker expiration implementation to use an approach similar to that of ExpiringMap. 
 
 ## Usage
 
-threadWait or sleep can be called from the main test thread to wait for some other thread to perform assertions. These operations will block until resume() is called, the operation times out, or a threadAssert call fails.
+Creates an expiring map with an entry duration of 60 seconds from creation:
 
-The threadAssert methods can be used from any thread to perform concurrent assertions. Assertion failures will result in the main thread being interrupted and the failure thrown.
-
-## Examples
-
-ConcurrentUnit allows you to perform assertions from outside the context of the JUnit runner's main thread while the main thread can be made to sleep or wait:
-
-    @Test
-    public void shouldSucceed() throws Throwable {
-        new Thread(new Runnable() {
-            public void run() {
-                threadAssertTrue(true);
-            }
-        }).start();
-        threadWait(0);
-    }
-
-Failed assertions will be properly reported:
-
-    @Test(expected = AssertionError.class)
-    public void shouldFail() throws Throwable {
-        new Thread(new Runnable() {
-            public void run() {
-                threadAssertTrue(false);
-            }
-        }).start();
-        threadWait(0);
-    }
+    Map<String, Integer> map = ExpiringMap.create();
     
-The main thread can wait to be resumed by a worker, and will throw TimeoutException if a resume does not occur within the wait duration:
+Creates an expiring map with an entry duration of 30 seconds from creation:
 
-    @Test(expected = TimeoutException.class)
-    public void sleepShouldSupportTimeouts() throws Throwable {
-        new Thread(new Runnable() {
-            public void run() {
-            	Thread.sleep(1000);
-            	resume();
-            }
-        }).start();
-        threadWait(500);
-    }
+    Map<String, Connection> map = ExpiringMap.builder()
+        .expiration(30, TimeUnit.SECONDS)
+        .build();
+
+Creates an expiring map where an entry duration of 5 minutes from their last access:
+
+    Map<String, Connection> map = ExpiringMap.builder()
+        .expirationPolicy(ExpirationPolicy.ACCESSED)
+        .expiration(5, TimeUnit.MINUTES)
+        .build(); 
+
+Creates an expiring map that invokes the given expiration listener for each entry as it expires:
+
+    Map<String, Connection> map = ExpiringMap.builder()
+        .expirationListener(new ExpirationListener<String, Connection>() { 
+            public void expired(String key, Connection connection) { 
+                connection.close(); 
+            })
+        .build();
+        
+Creates an expiring map that supports variable expiration, where the expiration duration and policy can vary for each entry.
+
+    Map<String, String> map = ExpiringMap.builder();
+        .variableExpiration()
+        .build();
+    map.put("foo", "bar");
+    map.setExpiration("foo", 5, TimeUnit.SECONDS);
+    map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
     
-The main thread can also be told to wait for n number of resume calls:
+## Variable Expiration Considerations
 
-    @Test
-    public void sleepShouldSupportTimeouts() throws Throwable {
-        new Thread(new Runnable() {
-            public void run() {
-            	for (int i = 0; i < 5; i++)
-            		resume();
-            }
-        }).start();
-        threadWait(500, 5);
-    }
+When variable expiration is disabled (default), put/remote operations are constant. When variable expiration is enabled, put/remove operations impose a cost of log(n).
 
-## References
+## Expiration Listener Considerations
 
-Thanks to the JSR-166 TCK authors for the initial inspiration.
+Expiration listeners should avoid blocking or synchronizing on shared resources since they are initially invoked from within the context of the ExpiringMap's lone Timer thread. Given this vulnerability, any expiration listener whose invocation duration exceeds a set threshold will thereafter be invoked from a separate thread pool to prevent entry expirations from stacking up in the main Timer thread.
+
+Nevertheless, ExpiringMap is still susceptible to ExpirationListener notifications stacking up if they are not processed in a timely manner.
+
+## Future Enhancements
+
+TODO Implement ConcurrentMap interface 
+TODO Consider strategies for dealing with long running expiration listeners
