@@ -11,10 +11,10 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
+import org.concurrentunit.ConcurrentTestCase;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.jhalt.concurrentunit.ConcurrentTestCase;
 import com.jhalt.expiringmap.ExpiringMap.ExpirationListener;
 import com.jhalt.expiringmap.ExpiringMap.ExpirationPolicy;
 
