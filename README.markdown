@@ -8,7 +8,7 @@ ExpiringMap is a high performance, low-overhead, thread-safe map that expires en
 
 ## Motivation
 
-In early 2009 my team came across the need for a simple map capable of expiring entries. After surveying the options available at the time and running some tests against them, we were surprised to find that none of the candidates provided what we were looking for: thread-safety, fast expiration, and low overhead. And while my project was using Google Collections, its expirable map entry implementation was still primitive and not suitable for heavy use. So I decided to create ExpiringMap.
+In early 2009 my team came across the need for a simple map capable of expiring entries. After surveying the options available at the time and running some tests against them, we were surprised to find that none of the candidates provided what we were looking for: thread-safety, fast expiration, and low overhead. So I created ExpiringMap.
 
 Since the expiring map implementations I surveyed invariably utilized polling, numerous threads, or one TimerTask per entry, ExpiringMap was designed to utilize single Timer thread and TimerTask.
 

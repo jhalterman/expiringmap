@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-import org.concurrentunit.Examples;
+import org.concurrentunit.ConcurrentTestCase;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -21,7 +21,7 @@ import com.jhalt.expiringmap.ExpiringMap.ExpirationPolicy;
 /**
  * Tests {@link ExpiringMap}.
  */
-public class ExpiringMapTest extends Examples {
+public class ExpiringMapTest extends ConcurrentTestCase {
   private static final int VALUE_PREFIX = 12345;
   private static final String KEY_PREFIX = "key prefix:";
 
