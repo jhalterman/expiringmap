@@ -1,10 +1,6 @@
 # ExpiringMap 0.3.0
 
-Copyright 2009-2011 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
-
-## Introduction
-
-ExpiringMap is a high performance, low-overhead, thread-safe map that expires entries. Optional features include expiration policies, variable entry settings, and expiration listeners.
+A high performance, low-overhead, thread-safe map that expires entries. Features include expiration policies, variable entry settings, and expiration listeners.
 
 ## Motivation
 
@@ -68,4 +64,4 @@ Nevertheless, ExpiringMap is still susceptible to ExpirationListener notificatio
 
 ## License
 
-ExpiringMap is released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
+Copyright 2009-2011 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
