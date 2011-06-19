@@ -69,44 +69,23 @@ public class ExpiringMap<K, V> implements Map<K, V> {
   private final EntryMap<K, V> entries;
   private final boolean variableExpiration;
 
-  /** Map entry expiration policy. */
-  public enum ExpirationPolicy {
-    /** Expires entries based on when they were last accessed */
-    ACCESSED,
-    /** Expires entries based on when they were created */
-    CREATED;
-  }
-
   /**
-   * A listener for expired object events.
+   * Creates a new instance of ExpiringMap.
    * 
-   * @param <K> Key type
-   * @param <V> Value type
+   * @param builder The map builder
    */
-  public interface ExpirationListener<K, V> {
-    /**
-     * Called when a map entry expires.
-     * 
-     * @param key Expired key
-     * @param value Expired value
-     */
-    void expired(K key, V value);
-  }
+  @SuppressWarnings({ "unchecked", "rawtypes" })
+  private ExpiringMap(Builder builder) {
+    variableExpiration = builder.variableExpiration;
+    entries = variableExpiration ? new EntryTreeHashMap<K, V>() : new EntryLinkedHashMap<K, V>();
 
-  /** Entry map definition. */
-  interface EntryMap<K, V> extends Map<K, ExpiringEntry<K, V>> {
-    /** Returns the first entry in the map or null if the map is empty. */
-    ExpiringEntry<K, V> first();
+    if (builder.expirationListeners != null)
+      expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>(
+          (List) builder.expirationListeners);
 
-    /** Returns a values iterator. */
-    Iterator<ExpiringEntry<K, V>> valuesIterator();
-
-    /**
-     * Reorders the given entry in the map.
-     * 
-     * @param entry to reorder
-     */
-    void reorder(ExpiringEntry<K, V> entry);
+    expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
+    expirationMillis = new AtomicLong(TimeUnit.MILLISECONDS.convert(builder.duration,
+        builder.timeUnit));
   }
 
   /**
@@ -127,10 +106,24 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     }
 
     /**
-     * Allows for map entries to have individual expirations and for expirations to be changed.
+     * Builds and returns an expiring map.
+     * 
+     * @param <K> Key type
+     * @param <V> Value type
      */
-    public Builder variableExpiration() {
-      variableExpiration = true;
+    public <K, V> ExpiringMap<K, V> build() {
+      return new ExpiringMap<K, V>(this);
+    }
+
+    /**
+     * Sets the default map entry expiration.
+     * 
+     * @param duration the length of time after an entry is created that it should be removed
+     * @param timeUnit unit the unit that {@code duration} is expressed in
+     */
+    public Builder expiration(long duration, TimeUnit timeUnit) {
+      this.duration = duration;
+      this.timeUnit = timeUnit;
       return this;
     }
 
@@ -162,26 +155,36 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     }
 
     /**
-     * Sets the default map entry expiration.
-     * 
-     * @param duration the length of time after an entry is created that it should be removed
-     * @param timeUnit unit the unit that {@code duration} is expressed in
+     * Allows for map entries to have individual expirations and for expirations to be changed.
      */
-    public Builder expiration(long duration, TimeUnit timeUnit) {
-      this.duration = duration;
-      this.timeUnit = timeUnit;
+    public Builder variableExpiration() {
+      variableExpiration = true;
       return this;
     }
+  }
 
+  /**
+   * A listener for expired object events.
+   * 
+   * @param <K> Key type
+   * @param <V> Value type
+   */
+  public interface ExpirationListener<K, V> {
     /**
-     * Builds and returns an expiring map.
+     * Called when a map entry expires.
      * 
-     * @param <K> Key type
-     * @param <V> Value type
+     * @param key Expired key
+     * @param value Expired value
      */
-    public <K, V> ExpiringMap<K, V> build() {
-      return new ExpiringMap<K, V>(this);
-    }
+    void expired(K key, V value);
+  }
+
+  /** Map entry expiration policy. */
+  public enum ExpirationPolicy {
+    /** Expires entries based on when they were last accessed */
+    ACCESSED,
+    /** Expires entries based on when they were created */
+    CREATED;
   }
 
   /** Entry LinkedHashMap implementation. */
@@ -189,21 +192,37 @@ public class ExpiringMap<K, V> implements Map<K, V> {
       EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
 
-    /** {@inheritDoc} */
+    @Override
     public ExpiringEntry<K, V> first() {
       return isEmpty() ? null : values().iterator().next();
     }
 
-    /** {@inheritDoc} */
+    @Override
     public void reorder(ExpiringEntry<K, V> value) {
       remove(value.key);
       put(value.key, value);
     }
 
-    /** {@inheritDoc} */
+    @Override
     public Iterator<ExpiringEntry<K, V>> valuesIterator() {
       return values().iterator();
     }
+  }
+
+  /** Entry map definition. */
+  interface EntryMap<K, V> extends Map<K, ExpiringEntry<K, V>> {
+    /** Returns the first entry in the map or null if the map is empty. */
+    ExpiringEntry<K, V> first();
+
+    /**
+     * Reorders the given entry in the map.
+     * 
+     * @param entry to reorder
+     */
+    void reorder(ExpiringEntry<K, V> entry);
+
+    /** Returns a values iterator. */
+    Iterator<ExpiringEntry<K, V>> valuesIterator();
   }
 
   /** Entry TreeHashMap implementation. */
@@ -212,12 +231,23 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     private static final long serialVersionUID = 1L;
     SortedSet<ExpiringEntry<K, V>> sortedSet = new TreeSet<ExpiringEntry<K, V>>();
 
-    /** {@inheritDoc} */
+    @Override
+    public void clear() {
+      super.clear();
+      sortedSet.clear();
+    }
+
+    @Override
     public ExpiringEntry<K, V> first() {
       return sortedSet.isEmpty() ? null : sortedSet.first();
     }
 
-    /** {@inheritDoc} */
+    @Override
+    public ExpiringEntry<K, V> put(K key, ExpiringEntry<K, V> value) {
+      sortedSet.add(value);
+      return super.put(key, value);
+    }
+
     @Override
     public ExpiringEntry<K, V> remove(Object key) {
       ExpiringEntry<K, V> entry = super.remove(key);
@@ -227,49 +257,35 @@ public class ExpiringMap<K, V> implements Map<K, V> {
       return entry;
     }
 
-    /** {@inheritDoc} */
+    @Override
     public void reorder(ExpiringEntry<K, V> value) {
       sortedSet.remove(value);
       sortedSet.add(value);
     }
 
-    /** {@inheritDoc} */
+    @Override
     public Iterator<ExpiringEntry<K, V>> valuesIterator() {
       return new Iterator<ExpiringEntry<K, V>>() {
         private final Iterator<ExpiringEntry<K, V>> iterator = sortedSet.iterator();
         private ExpiringEntry<K, V> next;
 
-        /** {@inheritDoc} */
+        @Override
         public boolean hasNext() {
           return iterator.hasNext();
         }
 
-        /** {@inheritDoc} */
+        @Override
         public ExpiringEntry<K, V> next() {
           next = iterator.next();
           return next;
         }
 
-        /** {@inheritDoc} */
+        @Override
         public void remove() {
           EntryTreeHashMap.super.remove(next.key);
           iterator.remove();
         }
       };
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public ExpiringEntry<K, V> put(K key, ExpiringEntry<K, V> value) {
-      sortedSet.add(value);
-      return super.put(key, value);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public void clear() {
-      super.clear();
-      sortedSet.clear();
     }
   }
 
@@ -315,12 +331,22 @@ public class ExpiringMap<K, V> implements Map<K, V> {
       resetExpiration();
     }
 
-    /** {@docRoot} */
+    @Override
     public int compareTo(ExpiringEntry<K, V> pOther) {
       if (key.equals(pOther.key))
         return 0;
       int result = expiration.get().compareTo(pOther.expiration.get());
       return result == 0 ? 1 : result;
+    }
+
+    @Override
+    public boolean equals(Object pOther) {
+      return key.equals(((ExpiringEntry<?, ?>) pOther).key);
+    }
+
+    @Override
+    public int hashCode() {
+      return key.hashCode();
     }
 
     /**
@@ -342,6 +368,11 @@ public class ExpiringMap<K, V> implements Map<K, V> {
       return result;
     }
 
+    /** Gets the entry value. */
+    synchronized V getValue() {
+      return value;
+    }
+
     /** Resets the entry's expiration date. */
     void resetExpiration() {
       expiration.set(new Date(expirationMillis.get() + System.currentTimeMillis()));
@@ -353,46 +384,19 @@ public class ExpiringMap<K, V> implements Map<K, V> {
       scheduled = true;
     }
 
-    /** Gets the entry value. */
-    synchronized V getValue() {
-      return value;
-    }
-
     /** Sets the entry value. */
     synchronized void setValue(V value) {
       this.value = value;
     }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean equals(Object pOther) {
-      return key.equals(((ExpiringEntry<?, ?>) pOther).key);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public int hashCode() {
-      return key.hashCode();
-    }
   }
 
   /**
-   * Creates a new instance of ExpiringMap.
+   * Creates an ExpiringMap builder.
    * 
-   * @param builder The map builder
+   * @return New ExpiringMap builder
    */
-  @SuppressWarnings({ "unchecked", "rawtypes" })
-  private ExpiringMap(Builder builder) {
-    variableExpiration = builder.variableExpiration;
-    entries = variableExpiration ? new EntryTreeHashMap<K, V>() : new EntryLinkedHashMap<K, V>();
-
-    if (builder.expirationListeners != null)
-      expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>(
-          (List) builder.expirationListeners);
-
-    expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
-    expirationMillis = new AtomicLong(TimeUnit.MILLISECONDS.convert(builder.duration,
-        builder.timeUnit));
+  public static Builder builder() {
+    return new Builder();
   }
 
   /**
@@ -404,12 +408,326 @@ public class ExpiringMap<K, V> implements Map<K, V> {
   }
 
   /**
-   * Creates an ExpiringMap builder.
+   * Adds an expiration listener.
    * 
-   * @return New ExpiringMap builder
+   * @param listener to add
+   * @throws NullPointerException if listener is null
    */
-  public static Builder builder() {
-    return new Builder();
+  public void addExpirationListener(ExpirationListener<K, V> listener) {
+    if (listener == null)
+      throw new NullPointerException();
+    if (expirationListeners == null)
+      expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>();
+    expirationListeners.add(new ExpirationListenerConfig<K, V>(listener));
+  }
+
+  @Override
+  public synchronized void clear() {
+    for (ExpiringEntry<K, V> entry : entries.values())
+      entry.cancel(false);
+
+    entries.clear();
+  }
+
+  @Override
+  public synchronized boolean containsKey(Object key) {
+    return entries.containsKey(key);
+  }
+
+  @Override
+  public synchronized boolean containsValue(Object value) {
+    return entries.containsValue(value);
+  }
+
+  /**
+   * Not currently supported. Use this{@link #keySet()} and this{@link #entrySetIterable()} instead.
+   * 
+   * @throws UnsupportedOperationException
+   */
+  @Override
+  public Set<Map.Entry<K, V>> entrySet() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public synchronized boolean equals(Object obj) {
+    return entries.equals(obj);
+  }
+
+  @Override
+  public V get(Object key) {
+    ExpiringEntry<K, V> entry = null;
+
+    synchronized (this) {
+      entry = entries.get(key);
+      if (entry == null)
+        return null;
+      if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
+        resetEntry(entry, false);
+    }
+
+    return entry.getValue();
+  }
+
+  /**
+   * Returns the map's default expiration duration in milliseconds.
+   * 
+   * @return The expiration duration (milliseconds)
+   */
+  public long getExpiration() {
+    return expirationMillis.get();
+  }
+
+  /**
+   * Gets the expiration duration in milliseconds for the entry corresponding to the given key.
+   * 
+   * @param key
+   * @return The expiration duration in milliseconds
+   * @throws NoSuchElementException If no entry exists for the given key
+   */
+  public long getExpiration(K key) {
+    ExpiringEntry<K, V> entry = null;
+    synchronized (this) {
+      entry = entries.get(key);
+    }
+
+    if (entry == null)
+      throw new NoSuchElementException();
+
+    return entry.expirationMillis.get();
+  }
+
+  @Override
+  public synchronized int hashCode() {
+    return entries.hashCode();
+  }
+
+  @Override
+  public synchronized boolean isEmpty() {
+    return entries.isEmpty();
+  }
+
+  public synchronized Set<K> keySet() {
+    return entries.keySet();
+  }
+
+  /**
+   * Puts {@code value} in the map for {@code key}. Resets the entry's expiration unless an entry
+   * already exists for the same {@code key} and {@code value}.
+   * 
+   * @param key to put value for
+   * @param value to put for key
+   * @throws NullPointerException on null key
+   */
+  @Override
+  public V put(K key, V value) {
+    if (key == null)
+      throw new NullPointerException();
+
+    synchronized (this) {
+      return putInternal(key, value, expirationPolicy.get(), getExpiration());
+    }
+  }
+
+  /**
+   * @see this{@link #put(Object, Object, ExpirationPolicy, long, TimeUnit)}
+   */
+  public V put(K key, V value, ExpirationPolicy expirationPolicy) {
+    return put(key, value, expirationPolicy, expirationMillis.get(), TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Puts {@code value} in the map for {@code key}. Resets the entry's expiration unless an entry
+   * already exists for the same {@code key} and {@code value}. Requires that variable expiration be
+   * enabled.
+   * 
+   * @param key Key to put value for
+   * @param value Value to put for key
+   * @param duration the length of time after an entry is created that it should be removed
+   * @param timeUnit unit the unit that {@code duration} is expressed in
+   * @throws UnsupportedOperationException If variable expiration is not enabled
+   * @throws NullPointerException on null key or timeUnit
+   */
+  public V put(K key, V value, ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
+    if (!variableExpiration)
+      throw new UnsupportedOperationException("Variable expiration is not enabled");
+
+    if (key == null || timeUnit == null)
+      throw new NullPointerException();
+
+    synchronized (this) {
+      return putInternal(key, value, expirationPolicy,
+          TimeUnit.MILLISECONDS.convert(duration, timeUnit));
+    }
+  }
+
+  /**
+   * @see this{@link #put(Object, Object, ExpirationPolicy, long, TimeUnit)}
+   */
+  public V put(K key, V value, long duration, TimeUnit timeUnit) {
+    return put(key, value, expirationPolicy.get(), duration, timeUnit);
+  }
+
+  /** @see this{@link #put(Object, Object)}. */
+  @Override
+  public void putAll(Map<? extends K, ? extends V> map) {
+    if (map == null)
+      throw new NullPointerException();
+
+    long expiration = getExpiration();
+    ExpirationPolicy expirationPolicy = this.expirationPolicy.get();
+
+    synchronized (this) {
+      for (Map.Entry<? extends K, ? extends V> entry : map.entrySet())
+        putInternal(entry.getKey(), entry.getValue(), expirationPolicy, expiration);
+    }
+  }
+
+  @Override
+  public V remove(Object key) {
+    ExpiringEntry<K, V> entry = null;
+
+    synchronized (this) {
+      entry = entries.remove(key);
+    }
+
+    if (entry == null)
+      return null;
+    if (entry.cancel(false))
+      scheduleEntry(entries.first());
+
+    return entry.getValue();
+  }
+
+  /**
+   * Removes an expiration listener.
+   * 
+   * @param listener
+   */
+  public void removeExpirationListener(ExpirationListener<K, V> listener) {
+    for (int i = 0; i < expirationListeners.size(); i++) {
+      if (expirationListeners.get(i).expirationListener.equals(listener)) {
+        expirationListeners.remove(i);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Resets expiration for the entry corresponding to {@code key}.
+   * 
+   * @param key to reset expiration for
+   */
+  public synchronized void resetExpiration(K key) {
+    ExpiringEntry<K, V> entry = entries.get(key);
+    if (entry != null)
+      resetEntry(entry, false);
+  }
+
+  /**
+   * Sets the expiration duration for the entry corresponding to the given key. Supported only if
+   * variable expiration is enabled.
+   * 
+   * @param key Key to set expiration for
+   * @param duration the length of time after an entry is created that it should be removed
+   * @param timeUnit unit the unit that {@code duration} is expressed in
+   * @throws UnsupportedOperationException If variable expiration is not enabled
+   */
+  public void setExpiration(K key, long duration, TimeUnit timeUnit) {
+    if (!variableExpiration)
+      throw new UnsupportedOperationException("Variable expiration is not enabled");
+
+    ExpiringEntry<K, V> entry = null;
+    synchronized (this) {
+      entry = entries.get(key);
+    }
+
+    entry.expirationMillis.set(TimeUnit.MILLISECONDS.convert(duration, timeUnit));
+    resetEntry(entry, true);
+  }
+
+  /**
+   * Updates the default map entry expiration. Supported only if variable expiration is enabled.
+   * 
+   * @param duration the length of time after an entry is created that it should be removed
+   * @param timeUnit unit the unit that {@code duration} is expressed in
+   */
+  public void setExpiration(long duration, TimeUnit timeUnit) {
+    if (!variableExpiration)
+      throw new UnsupportedOperationException("Variable expiration is not enabled");
+
+    expirationMillis.set(TimeUnit.MILLISECONDS.convert(duration, timeUnit));
+  }
+
+  /**
+   * Sets the global expiration policy for the map.
+   * 
+   * @param expirationPolicy
+   */
+  public void setExpirationPolicy(ExpirationPolicy expirationPolicy) {
+    this.expirationPolicy.set(expirationPolicy);
+  }
+
+  /**
+   * Sets the expiration policy for the entry corresponding to the given key.
+   * 
+   * @param key to set policy for
+   * @param expirationPolicy to set
+   * @throws UnsupportedOperationException If variable expiration is not enabled
+   */
+  public void setExpirationPolicy(K key, ExpirationPolicy expirationPolicy) {
+    if (!variableExpiration)
+      throw new UnsupportedOperationException("Variable expiration is not enabled");
+
+    ExpiringEntry<K, V> entry = null;
+    synchronized (this) {
+      entry = entries.get(key);
+    }
+
+    if (entry != null)
+      entry.expirationPolicy.set(expirationPolicy);
+  }
+
+  @Override
+  public synchronized int size() {
+    return entries.size();
+  }
+
+  /**
+   * Not currently supported. Use this{@link #valuesIterator()} instead.
+   * 
+   * @throws UnsupportedOperationException
+   */
+  @Override
+  public Collection<V> values() {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Returns an iterator over the map values.
+   * 
+   * @throws ConcurrentModificationException if the map's size changes while iterating, excluding
+   *           calls to (Iterator{@link #remove(Object)}.
+   */
+  public Iterator<V> valuesIterator() {
+    return new Iterator<V>() {
+      private final Iterator<ExpiringEntry<K, V>> iterator = entries.valuesIterator();
+
+      /** {@inheritDoc} */
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
+
+      /** {@inheritDoc} */
+      public V next() {
+        return iterator.next().getValue();
+      }
+
+      /** {@inheritDoc} */
+      public void remove() {
+        iterator.remove();
+      }
+    };
   }
 
   /**
@@ -441,6 +759,51 @@ public class ExpiringMap<K, V> implements Map<K, V> {
         listener.executionPolicy = startTime + LISTENER_EXECUTION_THRESHOLD > endTime ? 0 : 1;
       }
     }
+  }
+
+  /**
+   * Puts the given key/value in storage, scheduling the new entry for expiration if needed. If a
+   * previous value existed for the given key, it is first cancelled and the entries reordered to
+   * reflect the new expiration.
+   */
+  synchronized V putInternal(K key, V value, ExpirationPolicy expirationPolicy,
+      long expirationMillis) {
+    ExpiringEntry<K, V> entry = entries.get(key);
+    V oldValue = null;
+
+    if (entry == null) {
+      entry = new ExpiringEntry<K, V>(key, value,
+          variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy)
+              : this.expirationPolicy, variableExpiration ? new AtomicLong(expirationMillis)
+              : this.expirationMillis);
+      entries.put(key, entry);
+      if (entries.size() == 1 || entries.first().equals(entry))
+        scheduleEntry(entry);
+    } else {
+      oldValue = entry.getValue();
+      if (oldValue.equals(value))
+        return value;
+      entry.setValue(value);
+      resetEntry(entry, false);
+    }
+
+    return oldValue;
+  }
+
+  /**
+   * Resets the given entry's schedule canceling any existing scheduled expiration and reordering
+   * the entry in the internal map. Schedules the next entry in the map if the given {@code entry}
+   * was scheduled or if {@code scheduleNext} is true.
+   * 
+   * @param entry to reset
+   * @param scheduleFirstEntry whether the first entry should be automatically scheduled
+   */
+  synchronized void resetEntry(ExpiringEntry<K, V> entry, boolean scheduleFirstEntry) {
+    boolean scheduled = entry.cancel(true);
+    entries.reorder(entry);
+
+    if (scheduled || scheduleFirstEntry)
+      scheduleEntry(entries.first());
   }
 
   /**
@@ -496,372 +859,5 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     }
 
     timer.schedule(timerTask, entry.expiration.get());
-  }
-
-  /**
-   * Returns the map's default expiration duration in milliseconds.
-   * 
-   * @return The expiration duration (milliseconds)
-   */
-  public long getExpiration() {
-    return expirationMillis.get();
-  }
-
-  /**
-   * Updates the default map entry expiration. Supported only if variable expiration is enabled.
-   * 
-   * @param duration the length of time after an entry is created that it should be removed
-   * @param timeUnit unit the unit that {@code duration} is expressed in
-   */
-  public void setExpiration(long duration, TimeUnit timeUnit) {
-    if (!variableExpiration)
-      throw new UnsupportedOperationException("Variable expiration is not enabled");
-
-    expirationMillis.set(TimeUnit.MILLISECONDS.convert(duration, timeUnit));
-  }
-
-  /**
-   * Resets expiration for the entry corresponding to {@code key}.
-   * 
-   * @param key to reset expiration for
-   */
-  public synchronized void resetExpiration(K key) {
-    ExpiringEntry<K, V> entry = entries.get(key);
-    if (entry != null)
-      resetEntry(entry, false);
-  }
-
-  /**
-   * Sets the expiration duration for the entry corresponding to the given key. Supported only if
-   * variable expiration is enabled.
-   * 
-   * @param key Key to set expiration for
-   * @param duration the length of time after an entry is created that it should be removed
-   * @param timeUnit unit the unit that {@code duration} is expressed in
-   * @throws UnsupportedOperationException If variable expiration is not enabled
-   */
-  public void setExpiration(K key, long duration, TimeUnit timeUnit) {
-    if (!variableExpiration)
-      throw new UnsupportedOperationException("Variable expiration is not enabled");
-
-    ExpiringEntry<K, V> entry = null;
-    synchronized (this) {
-      entry = entries.get(key);
-    }
-
-    entry.expirationMillis.set(TimeUnit.MILLISECONDS.convert(duration, timeUnit));
-    resetEntry(entry, true);
-  }
-
-  /**
-   * Sets the global expiration policy for the map.
-   * 
-   * @param expirationPolicy
-   */
-  public void setExpirationPolicy(ExpirationPolicy expirationPolicy) {
-    this.expirationPolicy.set(expirationPolicy);
-  }
-
-  /**
-   * Sets the expiration policy for the entry corresponding to the given key.
-   * 
-   * @param key to set policy for
-   * @param expirationPolicy to set
-   * @throws UnsupportedOperationException If variable expiration is not enabled
-   */
-  public void setExpirationPolicy(K key, ExpirationPolicy expirationPolicy) {
-    if (!variableExpiration)
-      throw new UnsupportedOperationException("Variable expiration is not enabled");
-
-    ExpiringEntry<K, V> entry = null;
-    synchronized (this) {
-      entry = entries.get(key);
-    }
-
-    if (entry != null)
-      entry.expirationPolicy.set(expirationPolicy);
-  }
-
-  /**
-   * Gets the expiration duration in milliseconds for the entry corresponding to the given key.
-   * 
-   * @param key
-   * @return The expiration duration in milliseconds
-   * @throws NoSuchElementException If no entry exists for the given key
-   */
-  public long getExpiration(K key) {
-    ExpiringEntry<K, V> entry = null;
-    synchronized (this) {
-      entry = entries.get(key);
-    }
-
-    if (entry == null)
-      throw new NoSuchElementException();
-
-    return entry.expirationMillis.get();
-  }
-
-  /**
-   * Puts {@code value} in the map for {@code key}. Resets the entry's expiration unless an entry
-   * already exists for the same {@code key} and {@code value}.
-   * 
-   * @param key to put value for
-   * @param value to put for key
-   * @throws NullPointerException on null key
-   */
-  public V put(K key, V value) {
-    if (key == null)
-      throw new NullPointerException();
-
-    synchronized (this) {
-      return putInternal(key, value, expirationPolicy.get(), getExpiration());
-    }
-  }
-
-  /**
-   * @see this{@link #put(Object, Object, ExpirationPolicy, long, TimeUnit)}
-   */
-  public V put(K key, V value, long duration, TimeUnit timeUnit) {
-    return put(key, value, expirationPolicy.get(), duration, timeUnit);
-  }
-
-  /**
-   * @see this{@link #put(Object, Object, ExpirationPolicy, long, TimeUnit)}
-   */
-  public V put(K key, V value, ExpirationPolicy expirationPolicy) {
-    return put(key, value, expirationPolicy, expirationMillis.get(), TimeUnit.MILLISECONDS);
-  }
-
-  /**
-   * Puts {@code value} in the map for {@code key}. Resets the entry's expiration unless an entry
-   * already exists for the same {@code key} and {@code value}. Requires that variable expiration be
-   * enabled.
-   * 
-   * @param key Key to put value for
-   * @param value Value to put for key
-   * @param duration the length of time after an entry is created that it should be removed
-   * @param timeUnit unit the unit that {@code duration} is expressed in
-   * @throws UnsupportedOperationException If variable expiration is not enabled
-   * @throws NullPointerException on null key or timeUnit
-   */
-  public V put(K key, V value, ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
-    if (!variableExpiration)
-      throw new UnsupportedOperationException("Variable expiration is not enabled");
-
-    if (key == null || timeUnit == null)
-      throw new NullPointerException();
-
-    synchronized (this) {
-      return putInternal(key, value, expirationPolicy,
-          TimeUnit.MILLISECONDS.convert(duration, timeUnit));
-    }
-  }
-
-  /**
-   * Puts the given key/value in storage, scheduling the new entry for expiration if needed. If a
-   * previous value existed for the given key, it is first cancelled and the entries reordered to
-   * reflect the new expiration.
-   */
-  synchronized V putInternal(K key, V value, ExpirationPolicy expirationPolicy,
-      long expirationMillis) {
-    ExpiringEntry<K, V> entry = entries.get(key);
-    V oldValue = null;
-
-    if (entry == null) {
-      entry = new ExpiringEntry<K, V>(key, value,
-          variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy)
-              : this.expirationPolicy, variableExpiration ? new AtomicLong(expirationMillis)
-              : this.expirationMillis);
-      entries.put(key, entry);
-      if (entries.size() == 1 || entries.first().equals(entry))
-        scheduleEntry(entry);
-    } else {
-      oldValue = entry.getValue();
-      if (oldValue.equals(value))
-        return value;
-      entry.setValue(value);
-      resetEntry(entry, false);
-    }
-
-    return oldValue;
-  }
-
-  /**
-   * Resets the given entry's schedule canceling any existing scheduled expiration and reordering
-   * the entry in the internal map. Schedules the next entry in the map if the given {@code entry}
-   * was scheduled or if {@code scheduleNext} is true.
-   * 
-   * @param entry to reset
-   * @param scheduleFirstEntry whether the first entry should be automatically scheduled
-   */
-  synchronized void resetEntry(ExpiringEntry<K, V> entry, boolean scheduleFirstEntry) {
-    boolean scheduled = entry.cancel(true);
-    entries.reorder(entry);
-
-    if (scheduled || scheduleFirstEntry)
-      scheduleEntry(entries.first());
-  }
-
-  /** {@inheritDoc} */
-  public V get(Object key) {
-    ExpiringEntry<K, V> entry = null;
-
-    synchronized (this) {
-      entry = entries.get(key);
-      if (entry == null)
-        return null;
-      if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
-        resetEntry(entry, false);
-    }
-
-    return entry.getValue();
-  }
-
-  /** {@inheritDoc} */
-  public V remove(Object key) {
-    ExpiringEntry<K, V> entry = null;
-
-    synchronized (this) {
-      entry = entries.remove(key);
-    }
-
-    if (entry == null)
-      return null;
-    if (entry.cancel(false))
-      scheduleEntry(entries.first());
-
-    return entry.getValue();
-  }
-
-  /** {@inheritDoc} */
-  public synchronized boolean containsKey(Object key) {
-    return entries.containsKey(key);
-  }
-
-  /** {@inheritDoc} */
-  public synchronized boolean containsValue(Object value) {
-    return entries.containsValue(value);
-  }
-
-  /** {@inheritDoc} */
-  public synchronized int size() {
-    return entries.size();
-  }
-
-  /** {@inheritDoc} */
-  public synchronized boolean isEmpty() {
-    return entries.isEmpty();
-  }
-
-  /** {@inheritDoc} */
-  public synchronized void clear() {
-    for (ExpiringEntry<K, V> entry : entries.values())
-      entry.cancel(false);
-
-    entries.clear();
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public synchronized int hashCode() {
-    return entries.hashCode();
-  }
-
-  /** {@inheritDoc} */
-  public synchronized Set<K> keySet() {
-    return entries.keySet();
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public synchronized boolean equals(Object obj) {
-    return entries.equals(obj);
-  }
-
-  /** @see this{@link #put(Object, Object)}. */
-  public void putAll(Map<? extends K, ? extends V> map) {
-    if (map == null)
-      throw new NullPointerException();
-
-    long expiration = getExpiration();
-    ExpirationPolicy expirationPolicy = this.expirationPolicy.get();
-
-    synchronized (this) {
-      for (Map.Entry<? extends K, ? extends V> entry : map.entrySet())
-        putInternal(entry.getKey(), entry.getValue(), expirationPolicy, expiration);
-    }
-  }
-
-  /**
-   * Not currently supported. Use this{@link #valuesIterator()} instead.
-   * 
-   * @throws UnsupportedOperationException
-   */
-  public Collection<V> values() {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Returns an iterator over the map values.
-   * 
-   * @throws ConcurrentModificationException if the map's size changes while iterating, excluding
-   *           calls to (Iterator{@link #remove(Object)}.
-   */
-  public Iterator<V> valuesIterator() {
-    return new Iterator<V>() {
-      private final Iterator<ExpiringEntry<K, V>> iterator = entries.valuesIterator();
-
-      /** {@inheritDoc} */
-      public boolean hasNext() {
-        return iterator.hasNext();
-      }
-
-      /** {@inheritDoc} */
-      public V next() {
-        return iterator.next().getValue();
-      }
-
-      /** {@inheritDoc} */
-      public void remove() {
-        iterator.remove();
-      }
-    };
-  }
-
-  /**
-   * Not currently supported. Use this{@link #keySet()} and this{@link #entrySetIterable()} instead.
-   * 
-   * @throws UnsupportedOperationException
-   */
-  public Set<Map.Entry<K, V>> entrySet() {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Adds an expiration listener.
-   * 
-   * @param listener to add
-   * @throws NullPointerException if listener is null
-   */
-  public void addExpirationListener(ExpirationListener<K, V> listener) {
-    if (listener == null)
-      throw new NullPointerException();
-    if (expirationListeners == null)
-      expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>();
-    expirationListeners.add(new ExpirationListenerConfig<K, V>(listener));
-  }
-
-  /**
-   * Removes an expiration listener.
-   * 
-   * @param listener
-   */
-  public void removeExpirationListener(ExpirationListener<K, V> listener) {
-    for (int i = 0; i < expirationListeners.size(); i++) {
-      if (expirationListeners.get(i).expirationListener.equals(listener)) {
-        expirationListeners.remove(i);
-        return;
-      }
-    }
   }
 }

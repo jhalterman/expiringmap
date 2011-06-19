@@ -1,6 +1,6 @@
-# ExpiringMap 0.1.0
+# ExpiringMap 0.3.0
 
-Copyright 2009-2010 Jonathan Halterman - Released under the [EPL license](http://www.eclipse.org/legal/epl-v10.html).
+Copyright 2009-2011 Jonathan Halterman - Released under the [Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0.html).
 
 ## Introduction
 
@@ -68,4 +68,4 @@ Nevertheless, ExpiringMap is still susceptible to ExpirationListener notificatio
 
 ## License
 
-ExpiringMap is released under the [EPL license](http://www.eclipse.org/legal/epl-v10.html).
+ExpiringMap is released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
