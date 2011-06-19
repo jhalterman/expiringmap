@@ -1,6 +1,6 @@
 # ExpiringMap 0.3.0
 
-Copyright 2009-2011 Jonathan Halterman - Released under the [Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0.html).
+Copyright 2009-2011 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
 
 ## Introduction
 
