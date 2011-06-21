@@ -32,9 +32,9 @@
 	</build>
 	<dependencies>
 		<dependency>
-			<groupId>com.jhalt</groupId>
-			<artifactId>concurrentunit</artifactId>
-			<version>0.1.0-SNAPSHOT</version>
+			<groupId>org.concurrentunit</groupId>
+			<artifactId>concurrentunit-testng</artifactId>
+			<version>0.2.0-SNAPSHOT</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

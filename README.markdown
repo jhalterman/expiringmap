@@ -10,6 +10,10 @@ Since the expiring map implementations I surveyed invariably utilized polling, n
 
 Though ExpiringMap was created at a time when no comparable alternatives existed, [Guava](http://code.google.com/p/guava-libraries/)'s MapMaker was recently re-written to use an entry expiration approach similar to that of ExpiringMap, additionally enhancing it to include some of the same features. Going forward, either implementation is suitable for high performance use.
 
+## Setup
+
+[Download](https://github.com/jhalterman/expiringmap/downloads) the latest ExpiringMap jar and add it to your classpath.
+
 ## Usage
 
 Create an expiring map with a default entry duration of 60 seconds from creation:

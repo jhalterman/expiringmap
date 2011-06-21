@@ -1,19 +1,13 @@
 package com.jhalt.expiringmap;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-import org.concurrentunit.ConcurrentTestCase;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.concurrentunit.testng.ConcurrentTestCase;
+import org.testng.annotations.Test;
 
 import com.jhalt.expiringmap.ExpiringMap.ExpirationListener;
 import com.jhalt.expiringmap.ExpiringMap.ExpirationPolicy;
@@ -56,7 +50,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Ensures that concurrent modification throws an exception.
    */
-  @Test(expected = ConcurrentModificationException.class)
+  @Test(expectedExceptions = ConcurrentModificationException.class)
   public void testConcurrentModification() {
     ExpiringMap<String, String> map = ExpiringMap.create();
     map.put("a", "a");
@@ -141,8 +135,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    * Performs 10000 puts in each of 50 threads across 10 maps and ensures that expiration times are
    * within 1/10s of expected times.
    */
-  @Test
-  @Ignore
+  @Test(enabled = false)
   public void test50ThreadsAcross10MapsWith1SecondExpiration() throws Throwable {
     putTest(50, 10, 1000);
   }
@@ -151,8 +144,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    * Performs 10000 puts in each of 20 threads across 50 maps and ensures that expiration times are
    * within 1/10s of expected times.
    */
-  @Test
-  @Ignore
+  @Test(enabled = false)
   public void test20ThreadsAcross50MapsWith1SecondExpiration() throws Throwable {
     putTest(20, 50, 1000);
   }

@@ -1,7 +1,7 @@
 package com.jhalt.expiringmap;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 
 import java.util.Map.Entry;
 import java.util.NavigableSet;
@@ -10,7 +10,7 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.junit.Test;
+import org.testng.annotations.Test;
 
 import com.jhalt.expiringmap.ExpiringMap.ExpirationPolicy;
 import com.jhalt.expiringmap.ExpiringMap.ExpiringEntry;
