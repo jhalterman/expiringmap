@@ -47,6 +47,7 @@ Create an expiring map that supports variable expiration, where the expiration d
     Map<String, String> map = ExpiringMap.builder();
         .variableExpiration()
         .build();
+		
     map.put("foo", "bar");
     map.setExpiration("foo", 5, TimeUnit.SECONDS);
     map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
