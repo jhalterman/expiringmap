@@ -4,11 +4,11 @@ A high performance, low-overhead, thread-safe map that expires entries. Features
 
 ## Motivation
 
-In early 2009 my team came across the need for a simple map capable of expiring entries. After surveying the options available at the time and running some tests against them, we were surprised to find that none of the candidates provided what we were looking for: thread-safety, fast expiration, and low overhead. So I created ExpiringMap.
+In 2009 my team came across the need for a simple map capable of expiring entries. After surveying the options available at the time and running some tests against them, we were surprised to find that none of the candidates provided what we were looking for: thread-safety, fast expiration, and low overhead. So I created ExpiringMap.
 
-Since the expiring map implementations I surveyed invariably utilized polling, numerous threads, or one TimerTask per entry, ExpiringMap was designed to utilize single Timer thread and TimerTask.
+While the implementations I tested invariably utilized polling, numerous threads, or one TimerTask per entry, ExpiringMap was designed to utilize a single Timer thread and TimerTask. This approach keeps memory consumption at a minimum, and expirations fast.
 
-Though ExpiringMap was created at a time when no comparable alternatives existed, [Guava](http://code.google.com/p/guava-libraries/)'s MapMaker was recently re-written to use an entry expiration approach similar to that of ExpiringMap, additionally enhancing it to include some of the same features. Going forward, either implementation is suitable for high performance use.
+Though ExpiringMap was created when no comparable alternatives existed, [Guava](http://code.google.com/p/guava-libraries/)'s MapMaker was later re-written to use an entry expiration approach similar to that of ExpiringMap, additionally enhancing it to include some of the same features. Going forward, either implementation is suitable for high performance use.
 
 ## Setup
 
