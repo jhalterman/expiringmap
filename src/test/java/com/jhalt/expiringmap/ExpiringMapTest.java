@@ -15,6 +15,7 @@ import com.jhalt.expiringmap.ExpiringMap.ExpirationPolicy;
 /**
  * Tests {@link ExpiringMap}.
  */
+@Test
 public class ExpiringMapTest extends ConcurrentTestCase {
   private static final int VALUE_PREFIX = 12345;
   private static final String KEY_PREFIX = "key prefix:";
@@ -22,7 +23,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests {@link ExpiringMap#create()}.
    */
-  @Test
   public void testExpiringMapCreate() {
     assertNotNull(ExpiringMap.create());
   }
@@ -30,7 +30,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests {@link ExpiringMap#valuesIterator()}.
    */
-  @Test
   public void testValuesIterator() {
     ExpiringMap<String, String> map = ExpiringMap.create();
     Iterator<String> valuesIterator = map.valuesIterator();
@@ -64,7 +63,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests {@link ExpiringMap#put(Object, Object)}.
    */
-  @Test
   public void testPut() throws Exception {
     Map<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
 
@@ -81,7 +79,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests that a deadlock does not occur when concurrently reading/writing the same entries.
    */
-  @Test
   public void deadlockShouldNotOccur() throws Throwable {
     final long duration = 1000;
     final String finalKey = "final";
@@ -121,7 +118,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Asserts that a remove on a map that is empty after the remove causes no side effect.
    */
-  @Test
   public void testRemoveFromMapWithOneEntry() {
     Map<String, String> map = ExpiringMap.create();
     map.put("test", "test");
@@ -149,6 +145,14 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     putTest(20, 50, 1000);
   }
 
+  public void shouldAllowNullValue() {
+    ExpiringMap<String, String> map = ExpiringMap.create();
+    map.put("test", "value1");
+    map.put("test", null);
+    map.put("test", "value2");
+    assertEquals(map.get("test"), "value2");
+  }
+  
   /**
    * A test that performs 10000 puts in each of {@code threadCount} threads across {@code mapCount}
    * maps and asserts that expiration times are within 1/10th of a second of the expected times.
@@ -212,7 +216,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests that an expiration listener is called as expected.
    */
-  @Test
   public void expirationListenerShouldBeCalled() throws Throwable {
     final String key = "a";
     final String value = "v";
@@ -234,7 +237,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Ensures that long running expiration listeners should be threaded.
    */
-  @Test
   public void expirationListenerShouldBeThreaded() throws Throwable {
     final ExpiringMap<String, String> map = ExpiringMap.builder()
         .expiration(100, TimeUnit.MILLISECONDS).build();
@@ -262,7 +264,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Ensures that short running expiration listeners should be threaded.
    */
-  @Test
   public void expirationListenerShouldNotBeThreaded() throws Throwable {
     final ExpiringMap<String, String> map = ExpiringMap.builder()
         .expiration(100, TimeUnit.MILLISECONDS).build();
@@ -285,7 +286,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests {@link ExpiringMap#removeExpirationListener(ExpirationListener)}.
    */
-  @Test
   public void testRemoveExpirationListener() {
     ExpiringMap<String, String> map = ExpiringMap.create();
     ExpirationListener<String, String> listener1 = new ExpirationListener<String, String>() {
@@ -311,7 +311,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests {@link ExpiringMap#addExpirationListener(ExpirationListener)}.
    */
-  @Test
   public void testAddExpirationListener() {
     ExpiringMap<String, String> map = ExpiringMap.create();
     ExpirationListener<String, String> listener1 = new ExpirationListener<String, String>() {
@@ -333,7 +332,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests {@link ExpiringMap#get(Object)}.
    */
-  @Test
   public void testGet() throws Exception {
     Map<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
 
@@ -352,7 +350,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests that {@link ExpiringMap#setExpiration(long, TimeUnit)} works as expected.
    */
-  @Test
   public void testSetExpiration() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder().variableExpiration()
         .expiration(100, TimeUnit.MILLISECONDS).build();
@@ -370,7 +367,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests that {@link ExpiringMap#setExpirationPolicy(ExpirationPolicy) works as expected.
    */
-  @Test
   public void testSetExpirationPolicy() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder().variableExpiration()
         .expiration(100, TimeUnit.MILLISECONDS).build();
@@ -396,7 +392,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests that {@link ExpiringMap#setExpirationPolicy(Object, ExpirationPolicy) works as expected.
    */
-  @Test
   public void testEntrySetExpirationPolicy() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder().variableExpiration()
         .expiration(100, TimeUnit.MILLISECONDS).build();
@@ -426,7 +421,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   /**
    * Tests that {@link ExpiringMap#setExpiration(Object, long, TimeUnit)} works as expected.
    */
-  @Test
   public void testEntrySetExpiration() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder().variableExpiration().build();
     map.put("a", "a");
@@ -446,7 +440,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    * 
    * @throws Exception
    */
-  @Test
   public void entriesShouldExpireInOrder() throws Exception {
     Map<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
     map.put("John", "Doe");
@@ -469,7 +462,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    * 
    * @throws Throwable
    */
-  @Test
   public void entriesShouldBeReplaced() throws Throwable {
     final ExpiringMap<String, String> map = ExpiringMap.builder()
         .expiration(100, TimeUnit.MILLISECONDS).build();
@@ -504,7 +496,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    * 
    * @throws Exception
    */
-  @Test
   public void rescheduledEntryShouldExpire() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS)
         .build();
@@ -520,7 +511,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    * 
    * @throws Exception
    */
-  @Test
   public void shouldBulkExpire() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS)
         .build();

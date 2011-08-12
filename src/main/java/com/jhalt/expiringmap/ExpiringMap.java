@@ -781,8 +781,9 @@ public class ExpiringMap<K, V> implements Map<K, V> {
         scheduleEntry(entry);
     } else {
       oldValue = entry.getValue();
-      if (oldValue.equals(value))
+      if ((oldValue == null && value == null) || (oldValue != null && oldValue.equals(value)))
         return value;
+      
       entry.setValue(value);
       resetEntry(entry, false);
     }
