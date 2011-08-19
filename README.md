@@ -62,6 +62,10 @@ Expiration listeners should avoid blocking or synchronizing on shared resources 
 
 Nevertheless, ExpiringMap is still susceptible to ExpirationListener notifications stacking up if they are not processed in a timely manner.
 
+## Implementation Notes
+
+The current implementation uses synchronization instead of read/write locks since I initially wrote this for use on single core servers (yes, unfortunately). Read/write locks can easily be installed though - feel free to fork and have at it if you need to.
+
 ## Future Enhancements
 
 * Implement ConcurrentMap interface
