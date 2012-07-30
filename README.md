@@ -18,39 +18,49 @@ Though ExpiringMap was created when no comparable alternatives existed, [Guava](
 
 Create an expiring map with a default entry duration of 60 seconds from creation:
 
-    Map<String, Integer> map = ExpiringMap.create();
+```java
+Map<String, Integer> map = ExpiringMap.create();
+```
     
 Create an expiring map with an entry duration of 30 seconds from creation:
 
-    Map<String, Connection> map = ExpiringMap.builder()
-        .expiration(30, TimeUnit.SECONDS)
-        .build();
+```java
+Map<String, Connection> map = ExpiringMap.builder()
+  .expiration(30, TimeUnit.SECONDS)
+  .build();
+```
 
 Create an expiring map with an entry duration of 5 minutes from each entry's last access:
 
-    Map<String, Connection> map = ExpiringMap.builder()
-        .expirationPolicy(ExpirationPolicy.ACCESSED)
-        .expiration(5, TimeUnit.MINUTES)
-        .build(); 
+```java
+Map<String, Connection> map = ExpiringMap.builder()
+  .expirationPolicy(ExpirationPolicy.ACCESSED)
+  .expiration(5, TimeUnit.MINUTES)
+  .build(); 
+```
 
 Create an expiring map that invokes the given expiration listener for each entry as it expires:
 
-    Map<String, Connection> map = ExpiringMap.builder()
-        .expirationListener(new ExpirationListener<String, Connection>() { 
-            public void expired(String key, Connection connection) { 
-                connection.close(); 
-            })
-        .build();
+```java
+Map<String, Connection> map = ExpiringMap.builder()
+  .expirationListener(new ExpirationListener<String, Connection>() { 
+    public void expired(String key, Connection connection) { 
+      connection.close(); 
+    })
+  .build();
+```
         
 Create an expiring map that supports variable expiration, where the expiration duration and policy can vary for each entry.
 
-    Map<String, String> map = ExpiringMap.builder();
-        .variableExpiration()
-        .build();
-		
-    map.put("foo", "bar");
-    map.setExpiration("foo", 5, TimeUnit.SECONDS);
-    map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
+```java
+Map<String, String> map = ExpiringMap.builder();
+  .variableExpiration()
+  .build();
+
+map.put("foo", "bar");
+map.setExpiration("foo", 5, TimeUnit.SECONDS);
+map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
+```
 
 ### Variable Expiration Considerations
 
