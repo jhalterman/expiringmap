@@ -1,4 +1,4 @@
-package com.jhalt.expiringmap;
+package org.jodah.expiringmap;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;

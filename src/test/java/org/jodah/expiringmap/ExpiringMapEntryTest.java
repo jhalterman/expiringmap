@@ -1,4 +1,4 @@
-package com.jhalt.expiringmap;
+package org.jodah.expiringmap;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -10,10 +10,10 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.jodah.expiringmap.ExpiringMap.ExpirationPolicy;
+import org.jodah.expiringmap.ExpiringMap.ExpiringEntry;
 import org.testng.annotations.Test;
 
-import com.jhalt.expiringmap.ExpiringMap.ExpirationPolicy;
-import com.jhalt.expiringmap.ExpiringMap.ExpiringEntry;
 
 /**
  * Tests {@link ExpiringEntry}.

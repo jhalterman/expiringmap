@@ -1,4 +1,4 @@
-package com.jhalt.expiringmap;
+package org.jodah.expiringmap;
 
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
@@ -6,11 +6,11 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-import org.concurrentunit.testng.ConcurrentTestCase;
+import org.jodah.concurrentunit.testng.ConcurrentTestCase;
+import org.jodah.expiringmap.ExpiringMap.ExpirationListener;
+import org.jodah.expiringmap.ExpiringMap.ExpirationPolicy;
 import org.testng.annotations.Test;
 
-import com.jhalt.expiringmap.ExpiringMap.ExpirationListener;
-import com.jhalt.expiringmap.ExpiringMap.ExpirationPolicy;
 
 /**
  * Tests {@link ExpiringMap}.

@@ -1,15 +1,12 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>com.jhalt</groupId>
+  <groupId>org.jodah</groupId>
   <artifactId>expiringmap</artifactId>
   <packaging>jar</packaging>
   <description>ExpiringMap</description>
   <version>0.3.1-SNAPSHOT</version>
-  <scm>
-    <connection>scm:git:git@github.com:jhalterman/expiringmap.git</connection>
-    <developerConnection>scm:git:git@github.com:jhalterman/expiringmap.git</developerConnection>
-    <url>scm:git:git@github.com:jhalterman/expiringmap.git</url>
-  </scm>
+
   <licenses>
     <license>
       <name>Apache License, Version 2.0</name>
@@ -17,6 +14,13 @@
       <distribution>repo</distribution>
     </license>
   </licenses>
+
+  <scm>
+    <connection>scm:git:git@github.com:jhalterman/expiringmap.git</connection>
+    <developerConnection>scm:git:git@github.com:jhalterman/expiringmap.git</developerConnection>
+    <url>scm:git:git@github.com:jhalterman/expiringmap.git</url>
+  </scm>
+
   <build>
     <plugins>
       <plugin>
@@ -29,14 +33,16 @@
       </plugin>
     </plugins>
   </build>
+
   <dependencies>
     <dependency>
-      <groupId>org.concurrentunit</groupId>
+      <groupId>org.jodah</groupId>
       <artifactId>concurrentunit-testng</artifactId>
       <version>0.2.0-SNAPSHOT</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
+
   <reporting>
     <plugins>
       <plugin>
