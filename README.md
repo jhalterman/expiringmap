@@ -12,7 +12,15 @@ Though ExpiringMap was created when no comparable alternatives existed, [Guava](
 
 ## Setup
 
-[Download](https://github.com/jhalterman/expiringmap/downloads) the latest ExpiringMap jar and add it to your classpath.
+Add ExpiringMap as a Maven dependency:
+
+```xml
+<dependency>
+  <groupId>net.jodah</groupId>
+  <artifactId>expiringmap</artifactId>
+  <version>0.3.1</version>
+</dependency>
+```
 
 ## Usage
 
@@ -83,4 +91,4 @@ The current implementation uses synchronization instead of read/write locks sinc
 
 ## License
 
-Copyright 2009-2011 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
+Copyright 2009-2014 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
