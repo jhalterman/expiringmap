@@ -1,4 +1,4 @@
-package org.jodah.expiringmap;
+package net.jodah.expiringmap;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
