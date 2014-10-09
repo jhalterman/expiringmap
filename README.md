@@ -1,4 +1,4 @@
-# ExpiringMap
+# ExpiringMap [![Build Status](https://travis-ci.org/jhalterman/expiringmap.png)](https://travis-ci.org/jhalterman/expiringmap)
 
 A high performance, low-overhead, thread-safe map that expires entries. Features include expiration policies, variable entry settings, and expiration listeners.
 
