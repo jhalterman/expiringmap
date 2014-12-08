@@ -74,6 +74,10 @@ Expiration listeners should avoid blocking or synchronizing on shared resources 
 
 Nevertheless, ExpiringMap is still susceptible to ExpirationListener notifications stacking up if they are not processed in a timely manner.
 
+## Docs
+
+JavaDocs are available [here](https://jhalterman.github.com/expiringmap/javadoc).
+
 ## Future Enhancements
 
 * Consider strategies for dealing with long running expiration listeners
