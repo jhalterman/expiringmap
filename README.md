@@ -1,6 +1,6 @@
 # ExpiringMap [![Build Status](https://travis-ci.org/jhalterman/expiringmap.png)](https://travis-ci.org/jhalterman/expiringmap)
 
-A high performance, low-overhead, zero dependency, thread-safe map that expires entries. Features include expiration policies, variable entry settings, and expiration listeners.
+A high performance, low-overhead, zero dependency, thread-safe [ConcurrentMap](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ConcurrentMap.html) implementation that expires entries. Features include expiration policies, variable entry settings, and expiration listeners.
 
 ## Setup
 
@@ -10,7 +10,7 @@ Add ExpiringMap as a Maven dependency:
 <dependency>
   <groupId>net.jodah</groupId>
   <artifactId>expiringmap</artifactId>
-  <version>0.3.1</version>
+  <version>0.3.2</version>
 </dependency>
 ```
 
@@ -66,7 +66,7 @@ map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
 
 #### On Variable Expiration
 
-When variable expiration is disabled (default) put/remote operations are constant, whereas when it is enabled put/remove operations impose a cost of log(n).
+When variable expiration is disabled (default) put/remote operations are constant O(n), whereas when it is enabled put/remove operations impose a cost of O(log n).
 
 #### On Expiration Listeners
 
@@ -76,7 +76,6 @@ Nevertheless, ExpiringMap is still susceptible to ExpirationListener notificatio
 
 ## Future Enhancements
 
-* Implement ConcurrentMap interface
 * Consider strategies for dealing with long running expiration listeners
 
 ## License

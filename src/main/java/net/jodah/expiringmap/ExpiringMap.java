@@ -16,6 +16,7 @@ import java.util.SortedSet;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -38,15 +39,15 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * in a separate thread based on their first timed duration.
  * 
  * <p>
- * When variable expiration is disabled (default), put/remove operations are constant. When variable
- * expiration is enabled, put/remove operations impose a <i>log(n)</i> cost.
+ * When variable expiration is disabled (default), put/remove operations are constant O(n). When
+ * variable expiration is enabled, put/remove operations impose an <i>O(log n)</i> cost.
  * 
  * <p>
  * Example usages:
  * 
  * <pre> 
  * Map<String, Integer> map = ExpiringMap.create(); 
- * Map<String, IOWBean> map = ExpiringMap.builder().expiration(30, TimeUnit.SECONDS).build(); 
+ * Map<String, Integer> map = ExpiringMap.builder().expiration(30, TimeUnit.SECONDS).build(); 
  * Map<String, Connection> map = ExpiringMap.builder()
  *      .expiration(10, TimeUnit.MINUTES)
  *      .expirationListener(new ExpirationListener<String, Connection>() { 
@@ -60,7 +61,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @param <K> Key type
  * @param <V> Value type
  */
-public class ExpiringMap<K, V> implements Map<K, V> {
+public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   static final Timer timer = new Timer("ExpiringMap", true);
   static final ThreadPoolExecutor listenerService = NamedThreadFactory.decorate(
     (ThreadPoolExecutor) Executors.newCachedThreadPool(), "ExpiringMap");
@@ -630,6 +631,19 @@ public class ExpiringMap<K, V> implements Map<K, V> {
   }
 
   @Override
+  public V putIfAbsent(K key, V value) {
+    writeLock.lock();
+    try {
+      if (!entries.containsKey(key))
+        return putInternal(key, value, expirationPolicy.get(), getExpiration());
+      else
+        return entries.get(key).getValue();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  @Override
   public V remove(Object key) {
     ExpiringEntry<K, V> entry = null;
 
@@ -646,6 +660,51 @@ public class ExpiringMap<K, V> implements Map<K, V> {
       scheduleEntry(entries.first());
 
     return entry.getValue();
+  }
+
+  @Override
+  public boolean remove(Object key, Object value) {
+    writeLock.lock();
+    try {
+      ExpiringEntry<K, V> entry = entries.get(key);
+      if (entry != null && entry.getValue().equals(value)) {
+        entries.remove(key);
+        if (entry.cancel(false))
+          scheduleEntry(entries.first());
+        return true;
+      } else
+        return false;
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  @Override
+  public V replace(K key, V value) {
+    writeLock.lock();
+    try {
+      if (entries.containsKey(key)) {
+        return putInternal(key, value, expirationPolicy.get(), getExpiration());
+      } else
+        return null;
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  @Override
+  public boolean replace(K key, V oldValue, V newValue) {
+    writeLock.lock();
+    try {
+      ExpiringEntry<K, V> entry = entries.get(key);
+      if (entry != null && entry.getValue().equals(oldValue)) {
+        putInternal(key, newValue, expirationPolicy.get(), getExpiration());
+        return true;
+      } else
+        return false;
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   /**
@@ -760,7 +819,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
   }
 
   /**
-   * Not currently supported. Use this{@link #valuesIterator()} instead.
+   * Not currently supported. Use {@link #valuesIterator()} instead.
    * 
    * @throws UnsupportedOperationException
    */
@@ -773,7 +832,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
    * Returns an iterator over the map values.
    * 
    * @throws ConcurrentModificationException if the map's size changes while iterating, excluding
-   *           calls to (Iterator{@link #remove(Object)}.
+   *           calls to {@link Iterator#remove()}.
    */
   public Iterator<V> valuesIterator() {
     return new Iterator<V>() {
