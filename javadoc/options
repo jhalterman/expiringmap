@@ -1,0 +1,23 @@
+-classpath
+'/Users/jonathan/dev/expiringmap/target/classes'
+-encoding
+'UTF-8'
+-protected
+-sourcepath
+'/Users/jonathan/dev/expiringmap/src/main/java'
+-bottom
+'Copyright &#169; 2014. All rights reserved.'
+-charset
+'UTF-8'
+-d
+'/Users/jonathan/dev/expiringmap/docs/javadoc'
+-docencoding
+'UTF-8'
+-doctitle
+'ExpiringMap 0.3.3-SNAPSHOT API'
+-linkoffline
+'http://docs.oracle.com/javase/6/docs/api' '/Users/jonathan/dev/expiringmap/target/javadoc-bundle-options'
+-use
+-version
+-windowtitle
+'ExpiringMap 0.3.3-SNAPSHOT API'
