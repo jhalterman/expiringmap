@@ -22,6 +22,9 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * A thread-safe map that expires entries. Optional features include expiration policies, variable
@@ -60,12 +63,15 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ExpiringMap<K, V> implements Map<K, V> {
   static final Timer timer = new Timer("ExpiringMap", true);
   static final ThreadPoolExecutor listenerService = NamedThreadFactory.decorate(
-      (ThreadPoolExecutor) Executors.newCachedThreadPool(), "ExpiringMap");
+    (ThreadPoolExecutor) Executors.newCachedThreadPool(), "ExpiringMap");
   private static final long LISTENER_EXECUTION_THRESHOLD = 100;
   List<ExpirationListenerConfig<K, V>> expirationListeners;
   private AtomicLong expirationMillis;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
-  /** Guarded by "this" */
+  private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+  private final Lock readLock = readWriteLock.readLock();
+  private final Lock writeLock = readWriteLock.writeLock();
+  /** Guarded by "readWriteLock" */
   private final EntryMap<K, V> entries;
   private final boolean variableExpiration;
 
@@ -81,11 +87,11 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
     if (builder.expirationListeners != null)
       expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>(
-          (List) builder.expirationListeners);
+        (List) builder.expirationListeners);
 
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
     expirationMillis = new AtomicLong(TimeUnit.MILLISECONDS.convert(builder.duration,
-        builder.timeUnit));
+      builder.timeUnit));
   }
 
   /**
@@ -189,7 +195,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
   /** Entry LinkedHashMap implementation. */
   static class EntryLinkedHashMap<K, V> extends LinkedHashMap<K, ExpiringEntry<K, V>> implements
-      EntryMap<K, V> {
+    EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
 
     @Override
@@ -227,7 +233,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
   /** Entry TreeHashMap implementation. */
   static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>> implements
-      EntryMap<K, V> {
+    EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
     SortedSet<ExpiringEntry<K, V>> sortedSet = new TreeSet<ExpiringEntry<K, V>>();
 
@@ -322,7 +328,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
      * @param expirationMillis for the entry
      */
     ExpiringEntry(K key, V value, AtomicReference<ExpirationPolicy> expirationPolicy,
-        AtomicLong expirationMillis) {
+      AtomicLong expirationMillis) {
       this.key = key;
       this.value = value;
       this.expirationPolicy = expirationPolicy;
@@ -422,21 +428,35 @@ public class ExpiringMap<K, V> implements Map<K, V> {
   }
 
   @Override
-  public synchronized void clear() {
-    for (ExpiringEntry<K, V> entry : entries.values())
-      entry.cancel(false);
-
-    entries.clear();
+  public void clear() {
+    writeLock.lock();
+    try {
+      for (ExpiringEntry<K, V> entry : entries.values())
+        entry.cancel(false);
+      entries.clear();
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   @Override
-  public synchronized boolean containsKey(Object key) {
-    return entries.containsKey(key);
+  public boolean containsKey(Object key) {
+    readLock.lock();
+    try {
+      return entries.containsKey(key);
+    } finally {
+      readLock.unlock();
+    }
   }
 
   @Override
-  public synchronized boolean containsValue(Object value) {
-    return entries.containsValue(value);
+  public boolean containsValue(Object value) {
+    readLock.lock();
+    try {
+      return entries.containsValue(value);
+    } finally {
+      readLock.unlock();
+    }
   }
 
   /**
@@ -450,21 +470,30 @@ public class ExpiringMap<K, V> implements Map<K, V> {
   }
 
   @Override
-  public synchronized boolean equals(Object obj) {
-    return entries.equals(obj);
+  public boolean equals(Object obj) {
+    readLock.lock();
+    try {
+      return entries.equals(obj);
+    } finally {
+      readLock.unlock();
+    }
   }
 
   @Override
   public V get(Object key) {
     ExpiringEntry<K, V> entry = null;
 
-    synchronized (this) {
+    readLock.lock();
+    try {
       entry = entries.get(key);
-      if (entry == null)
-        return null;
-      if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
-        resetEntry(entry, false);
+    } finally {
+      readLock.unlock();
     }
+
+    if (entry == null)
+      return null;
+    if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
+      resetEntry(entry, false);
 
     return entry.getValue();
   }
@@ -487,8 +516,11 @@ public class ExpiringMap<K, V> implements Map<K, V> {
    */
   public long getExpiration(K key) {
     ExpiringEntry<K, V> entry = null;
-    synchronized (this) {
+    readLock.lock();
+    try {
       entry = entries.get(key);
+    } finally {
+      readLock.unlock();
     }
 
     if (entry == null)
@@ -498,17 +530,32 @@ public class ExpiringMap<K, V> implements Map<K, V> {
   }
 
   @Override
-  public synchronized int hashCode() {
-    return entries.hashCode();
+  public int hashCode() {
+    readLock.lock();
+    try {
+      return entries.hashCode();
+    } finally {
+      readLock.unlock();
+    }
   }
 
   @Override
-  public synchronized boolean isEmpty() {
-    return entries.isEmpty();
+  public boolean isEmpty() {
+    readLock.lock();
+    try {
+      return entries.isEmpty();
+    } finally {
+      readLock.unlock();
+    }
   }
 
-  public synchronized Set<K> keySet() {
-    return entries.keySet();
+  public Set<K> keySet() {
+    readLock.lock();
+    try {
+      return entries.keySet();
+    } finally {
+      readLock.unlock();
+    }
   }
 
   /**
@@ -524,9 +571,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     if (key == null)
       throw new NullPointerException();
 
-    synchronized (this) {
-      return putInternal(key, value, expirationPolicy.get(), getExpiration());
-    }
+    return putInternal(key, value, expirationPolicy.get(), getExpiration());
   }
 
   /**
@@ -555,10 +600,8 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     if (key == null || timeUnit == null)
       throw new NullPointerException();
 
-    synchronized (this) {
-      return putInternal(key, value, expirationPolicy,
-          TimeUnit.MILLISECONDS.convert(duration, timeUnit));
-    }
+    return putInternal(key, value, expirationPolicy,
+      TimeUnit.MILLISECONDS.convert(duration, timeUnit));
   }
 
   /**
@@ -577,9 +620,12 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     long expiration = getExpiration();
     ExpirationPolicy expirationPolicy = this.expirationPolicy.get();
 
-    synchronized (this) {
+    writeLock.lock();
+    try {
       for (Map.Entry<? extends K, ? extends V> entry : map.entrySet())
         putInternal(entry.getKey(), entry.getValue(), expirationPolicy, expiration);
+    } finally {
+      writeLock.unlock();
     }
   }
 
@@ -587,8 +633,11 @@ public class ExpiringMap<K, V> implements Map<K, V> {
   public V remove(Object key) {
     ExpiringEntry<K, V> entry = null;
 
-    synchronized (this) {
+    writeLock.lock();
+    try {
       entry = entries.remove(key);
+    } finally {
+      writeLock.unlock();
     }
 
     if (entry == null)
@@ -618,8 +667,16 @@ public class ExpiringMap<K, V> implements Map<K, V> {
    * 
    * @param key to reset expiration for
    */
-  public synchronized void resetExpiration(K key) {
-    ExpiringEntry<K, V> entry = entries.get(key);
+  public void resetExpiration(K key) {
+    ExpiringEntry<K, V> entry = null;
+
+    readLock.lock();
+    try {
+      entry = entries.get(key);
+    } finally {
+      readLock.unlock();
+    }
+
     if (entry != null)
       resetEntry(entry, false);
   }
@@ -637,13 +694,14 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     if (!variableExpiration)
       throw new UnsupportedOperationException("Variable expiration is not enabled");
 
-    ExpiringEntry<K, V> entry = null;
-    synchronized (this) {
-      entry = entries.get(key);
+    writeLock.lock();
+    try {
+      ExpiringEntry<K, V> entry = entries.get(key);
+      entry.expirationMillis.set(TimeUnit.MILLISECONDS.convert(duration, timeUnit));
+      resetEntry(entry, true);
+    } finally {
+      writeLock.unlock();
     }
-
-    entry.expirationMillis.set(TimeUnit.MILLISECONDS.convert(duration, timeUnit));
-    resetEntry(entry, true);
   }
 
   /**
@@ -680,8 +738,11 @@ public class ExpiringMap<K, V> implements Map<K, V> {
       throw new UnsupportedOperationException("Variable expiration is not enabled");
 
     ExpiringEntry<K, V> entry = null;
-    synchronized (this) {
+    readLock.lock();
+    try {
       entry = entries.get(key);
+    } finally {
+      readLock.unlock();
     }
 
     if (entry != null)
@@ -689,8 +750,13 @@ public class ExpiringMap<K, V> implements Map<K, V> {
   }
 
   @Override
-  public synchronized int size() {
-    return entries.size();
+  public int size() {
+    readLock.lock();
+    try {
+      return entries.size();
+    } finally {
+      readLock.unlock();
+    }
   }
 
   /**
@@ -766,29 +832,33 @@ public class ExpiringMap<K, V> implements Map<K, V> {
    * previous value existed for the given key, it is first cancelled and the entries reordered to
    * reflect the new expiration.
    */
-  synchronized V putInternal(K key, V value, ExpirationPolicy expirationPolicy,
-      long expirationMillis) {
-    ExpiringEntry<K, V> entry = entries.get(key);
-    V oldValue = null;
+  V putInternal(K key, V value, ExpirationPolicy expirationPolicy, long expirationMillis) {
+    writeLock.lock();
+    try {
+      ExpiringEntry<K, V> entry = entries.get(key);
+      V oldValue = null;
 
-    if (entry == null) {
-      entry = new ExpiringEntry<K, V>(key, value,
+      if (entry == null) {
+        entry = new ExpiringEntry<K, V>(key, value,
           variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy)
-              : this.expirationPolicy, variableExpiration ? new AtomicLong(expirationMillis)
-              : this.expirationMillis);
-      entries.put(key, entry);
-      if (entries.size() == 1 || entries.first().equals(entry))
-        scheduleEntry(entry);
-    } else {
-      oldValue = entry.getValue();
-      if ((oldValue == null && value == null) || (oldValue != null && oldValue.equals(value)))
-        return value;
-      
-      entry.setValue(value);
-      resetEntry(entry, false);
-    }
+            : this.expirationPolicy, variableExpiration ? new AtomicLong(expirationMillis)
+            : this.expirationMillis);
+        entries.put(key, entry);
+        if (entries.size() == 1 || entries.first().equals(entry))
+          scheduleEntry(entry);
+      } else {
+        oldValue = entry.getValue();
+        if ((oldValue == null && value == null) || (oldValue != null && oldValue.equals(value)))
+          return value;
 
-    return oldValue;
+        entry.setValue(value);
+        resetEntry(entry, false);
+      }
+
+      return oldValue;
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   /**
@@ -799,12 +869,17 @@ public class ExpiringMap<K, V> implements Map<K, V> {
    * @param entry to reset
    * @param scheduleFirstEntry whether the first entry should be automatically scheduled
    */
-  synchronized void resetEntry(ExpiringEntry<K, V> entry, boolean scheduleFirstEntry) {
-    boolean scheduled = entry.cancel(true);
-    entries.reorder(entry);
+  void resetEntry(ExpiringEntry<K, V> entry, boolean scheduleFirstEntry) {
+    writeLock.lock();
+    try {
+      boolean scheduled = entry.cancel(true);
+      entries.reorder(entry);
 
-    if (scheduled || scheduleFirstEntry)
-      scheduleEntry(entries.first());
+      if (scheduled || scheduleFirstEntry)
+        scheduleEntry(entries.first());
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   /**
@@ -823,13 +898,14 @@ public class ExpiringMap<K, V> implements Map<K, V> {
         return;
 
       final WeakReference<ExpiringEntry<K, V>> entryReference = new WeakReference<ExpiringEntry<K, V>>(
-          entry);
+        entry);
       timerTask = new TimerTask() {
         @Override
         public void run() {
           ExpiringEntry<K, V> entry = entryReference.get();
 
-          synchronized (ExpiringMap.this) {
+          writeLock.lock();
+          try {
             if (entry != null && entry.scheduled) {
               entries.remove(entry.key);
               notifyListeners(entry);
@@ -852,6 +928,8 @@ public class ExpiringMap<K, V> implements Map<K, V> {
               }
             } catch (NoSuchElementException ignored) {
             }
+          } finally {
+            writeLock.unlock();
           }
         }
       };
