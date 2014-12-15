@@ -8,7 +8,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 
  * @author Jonathan Halterman
  */
-public class NamedThreadFactory implements ThreadFactory {
+class NamedThreadFactory implements ThreadFactory {
   private final String name;
   private final ThreadFactory threadFactory;
 
@@ -18,7 +18,7 @@ public class NamedThreadFactory implements ThreadFactory {
    * @param threadFactory Factory to decorate
    * @param name Name
    */
-  public NamedThreadFactory(ThreadFactory threadFactory, String name) {
+  NamedThreadFactory(ThreadFactory threadFactory, String name) {
     this.threadFactory = threadFactory;
     this.name = name + " ";
   }
@@ -29,7 +29,7 @@ public class NamedThreadFactory implements ThreadFactory {
    * @param executor Executor to decorate.
    * @return The decorated executor
    */
-  public static ThreadPoolExecutor decorate(ThreadPoolExecutor executor, String pName) {
+  static ThreadPoolExecutor decorate(ThreadPoolExecutor executor, String pName) {
     executor.setThreadFactory(new NamedThreadFactory(executor.getThreadFactory(), pName));
     return executor;
   }
