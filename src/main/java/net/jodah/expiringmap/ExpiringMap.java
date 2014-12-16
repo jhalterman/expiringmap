@@ -126,7 +126,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * Sets the default map entry expiration.
      * 
      * @param duration the length of time after an entry is created that it should be removed
-     * @param timeUnit unit the unit that {@code duration} is expressed in
+     * @param timeUnit the unit that {@code duration} is expressed in
      */
     public Builder expiration(long duration, TimeUnit timeUnit) {
       this.duration = duration;
@@ -590,7 +590,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @param key Key to put value for
    * @param value Value to put for key
    * @param duration the length of time after an entry is created that it should be removed
-   * @param timeUnit unit the unit that {@code duration} is expressed in
+   * @param timeUnit the unit that {@code duration} is expressed in
    * @throws UnsupportedOperationException If variable expiration is not enabled
    * @throws NullPointerException on null key or timeUnit
    */
@@ -746,7 +746,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param key Key to set expiration for
    * @param duration the length of time after an entry is created that it should be removed
-   * @param timeUnit unit the unit that {@code duration} is expressed in
+   * @param timeUnit the unit that {@code duration} is expressed in
    * @throws UnsupportedOperationException If variable expiration is not enabled
    */
   public void setExpiration(K key, long duration, TimeUnit timeUnit) {
@@ -767,7 +767,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * Updates the default map entry expiration. Supported only if variable expiration is enabled.
    * 
    * @param duration the length of time after an entry is created that it should be removed
-   * @param timeUnit unit the unit that {@code duration} is expressed in
+   * @param timeUnit the unit that {@code duration} is expressed in
    */
   public void setExpiration(long duration, TimeUnit timeUnit) {
     if (!variableExpiration)

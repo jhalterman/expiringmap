@@ -50,16 +50,22 @@ Map<String, Connection> map = ExpiringMap.builder()
   .build();
 ```
         
-Create an expiring map that supports variable expiration, where the expiration duration and policy can vary for each entry.
+Create an expiring map that supports variable expiration, where the expiration duration and policy can vary for each entry:
 
 ```java
-Map<String, String> map = ExpiringMap.builder();
+Map<String, String> map = ExpiringMap.builder()
   .variableExpiration()
   .build();
 
-map.put("foo", "bar");
+map.put("foo", "bar", ExpirationPolicy.ACCESSED, 5, TimeUnit.SECONDS);
+```
+
+Expirations can also be set and reset on the fly:
+
+```java
 map.setExpiration("foo", 5, TimeUnit.SECONDS);
 map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
+map.resetExpiration("foo");
 ```
 
 ## Additional Notes
