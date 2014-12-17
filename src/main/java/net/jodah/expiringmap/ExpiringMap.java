@@ -75,7 +75,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   List<ExpirationListenerConfig<K, V>> expirationListeners;
   private AtomicLong expirationMillis;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
-  private final EntryLoader<? super K, V> entryLoader;
+  private final EntryLoader<? super K, ? extends V> entryLoader;
   private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
   private final Lock readLock = readWriteLock.readLock();
   private final Lock writeLock = readWriteLock.writeLock();
@@ -244,6 +244,22 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     CREATED;
   }
 
+  /** Entry map definition. */
+  interface EntryMap<K, V> extends Map<K, ExpiringEntry<K, V>> {
+    /** Returns the first entry in the map or null if the map is empty. */
+    ExpiringEntry<K, V> first();
+
+    /**
+     * Reorders the given entry in the map.
+     * 
+     * @param entry to reorder
+     */
+    void reorder(ExpiringEntry<K, V> entry);
+
+    /** Returns a values iterator. */
+    Iterator<ExpiringEntry<K, V>> valuesIterator();
+  }
+
   /** Entry LinkedHashMap implementation. */
   static class EntryLinkedHashMap<K, V> extends LinkedHashMap<K, ExpiringEntry<K, V>> implements
     EntryMap<K, V> {
@@ -264,22 +280,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     public Iterator<ExpiringEntry<K, V>> valuesIterator() {
       return values().iterator();
     }
-  }
-
-  /** Entry map definition. */
-  interface EntryMap<K, V> extends Map<K, ExpiringEntry<K, V>> {
-    /** Returns the first entry in the map or null if the map is empty. */
-    ExpiringEntry<K, V> first();
-
-    /**
-     * Reorders the given entry in the map.
-     * 
-     * @param entry to reorder
-     */
-    void reorder(ExpiringEntry<K, V> entry);
-
-    /** Returns a values iterator. */
-    Iterator<ExpiringEntry<K, V>> valuesIterator();
   }
 
   /** Entry TreeHashMap implementation. */
