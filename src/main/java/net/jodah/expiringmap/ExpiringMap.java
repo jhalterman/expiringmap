@@ -49,12 +49,18 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Map<String, Integer> map = ExpiringMap.create(); 
  * Map<String, Integer> map = ExpiringMap.builder().expiration(30, TimeUnit.SECONDS).build(); 
  * Map<String, Connection> map = ExpiringMap.builder()
- *      .expiration(10, TimeUnit.MINUTES)
- *      .expirationListener(new ExpirationListener<String, Connection>() { 
- *          public void expired(String key, Connection connection) { 
- *              connection.close(); 
- *          })
- *      .build(); 
+ *   .expiration(10, TimeUnit.MINUTES)
+ *   .entryLoader(new EntryLoader<String, Connection>() {
+ *     public Connection load(String address) {
+ *       return new Connection(address);
+ *     }
+ *   })
+ *   .expirationListener(new ExpirationListener<String, Connection>() { 
+ *     public void expired(String key, Connection connection) { 
+ *       connection.close();
+ *     } 
+ *   })
+ *   .build(); 
  * </pre>
  * 
  * @author Jonathan Halterman
@@ -69,6 +75,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   List<ExpirationListenerConfig<K, V>> expirationListeners;
   private AtomicLong expirationMillis;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
+  private final EntryLoader<? super K, V> entryLoader;
   private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
   private final Lock readLock = readWriteLock.readLock();
   private final Lock writeLock = readWriteLock.writeLock();
@@ -81,30 +88,29 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param builder The map builder
    */
-  @SuppressWarnings({ "unchecked", "rawtypes" })
-  private ExpiringMap(Builder builder) {
+  private ExpiringMap(Builder<K, V> builder) {
     variableExpiration = builder.variableExpiration;
     entries = variableExpiration ? new EntryTreeHashMap<K, V>() : new EntryLinkedHashMap<K, V>();
-
     if (builder.expirationListeners != null)
       expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>(
-        (List) builder.expirationListeners);
-
+        builder.expirationListeners);
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
     expirationMillis = new AtomicLong(TimeUnit.MILLISECONDS.convert(builder.duration,
       builder.timeUnit));
+    entryLoader = builder.entryLoader;
   }
 
   /**
    * Builds ExpiringMap instances. Defaults to ExpirationPolicy.CREATED and expiration of 60
    * TimeUnit.SECONDS.
    */
-  public static final class Builder {
+  public static final class Builder<K, V> {
     private ExpirationPolicy expirationPolicy = ExpirationPolicy.CREATED;
-    private List<ExpirationListenerConfig<?, ?>> expirationListeners;
+    private List<ExpirationListenerConfig<K, V>> expirationListeners;
     private TimeUnit timeUnit = TimeUnit.SECONDS;
     private boolean variableExpiration;
     private long duration = 60;
+    private EntryLoader<K, V> entryLoader;
 
     /**
      * Creates a new Builder object.
@@ -115,11 +121,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     /**
      * Builds and returns an expiring map.
      * 
-     * @param <K> Key type
-     * @param <V> Value type
+     * @param <K1> Key type
+     * @param <V1> Value type
      */
-    public <K, V> ExpiringMap<K, V> build() {
-      return new ExpiringMap<K, V>(this);
+    @SuppressWarnings("unchecked")
+    public <K1 extends K, V1 extends V> ExpiringMap<K1, V1> build() {
+      return new ExpiringMap<K1, V1>((Builder<K1, V1>) this);
     }
 
     /**
@@ -128,27 +135,54 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * @param duration the length of time after an entry is created that it should be removed
      * @param timeUnit the unit that {@code duration} is expressed in
      */
-    public Builder expiration(long duration, TimeUnit timeUnit) {
+    public Builder<K, V> expiration(long duration, TimeUnit timeUnit) {
       this.duration = duration;
       this.timeUnit = timeUnit;
       return this;
     }
 
     /**
+     * Sets the EntryLoader to use when loading entries.
+     * 
+     * @param listener to set
+     */
+    @SuppressWarnings("unchecked")
+    public <K1 extends K, V1 extends V> Builder<K1, V1> entryLoader(
+      EntryLoader<? super K1, ? super V1> loader) {
+      entryLoader = (EntryLoader<K, V>) loader;
+      return (Builder<K1, V1>) this;
+    }
+
+    /**
+     * Sets the expiration listener which will receive notifications upon each map entry's
+     * expiration.
+     * 
+     * @param listener to set
+     */
+    @SuppressWarnings("unchecked")
+    public <K1 extends K, V1 extends V> Builder<K1, V1> expirationListener(
+      ExpirationListener<? super K1, ? super V1> listener) {
+      if (expirationListeners == null)
+        expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>();
+      expirationListeners.add(new ExpirationListenerConfig<K, V>(
+        (ExpirationListener<K, V>) listener));
+      return (Builder<K1, V1>) this;
+    }
+
+    /**
      * Sets expiration listeners which will receive notifications upon each map entry's expiration.
      * 
      * @param listeners to set
-     * @return
      */
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    public Builder expirationListener(ExpirationListener<?, ?>... listeners) {
-      if (this.expirationListeners == null)
-        expirationListeners = new ArrayList<ExpirationListenerConfig<?, ?>>(listeners.length);
-
-      for (ExpirationListener<?, ?> listener : listeners)
-        expirationListeners.add(new ExpirationListenerConfig(listener));
-
-      return this;
+    @SuppressWarnings("unchecked")
+    public <K1 extends K, V1 extends V> Builder<K1, V1> expirationListeners(
+      List<ExpirationListener<? super K1, ? super V1>> listeners) {
+      if (expirationListeners == null)
+        expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>(listeners.size());
+      for (ExpirationListener<? super K1, ? super V1> listener : listeners)
+        expirationListeners.add(new ExpirationListenerConfig<K, V>(
+          (ExpirationListener<K, V>) listener));
+      return (Builder<K1, V1>) this;
     }
 
     /**
@@ -156,7 +190,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * 
      * @param expirationPolicy
      */
-    public Builder expirationPolicy(ExpirationPolicy expirationPolicy) {
+    public Builder<K, V> expirationPolicy(ExpirationPolicy expirationPolicy) {
       this.expirationPolicy = expirationPolicy;
       return this;
     }
@@ -164,7 +198,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     /**
      * Allows for map entries to have individual expirations and for expirations to be changed.
      */
-    public Builder variableExpiration() {
+    public Builder<K, V> variableExpiration() {
       variableExpiration = true;
       return this;
     }
@@ -184,6 +218,22 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * @param value Expired value
      */
     void expired(K key, V value);
+  }
+
+  /**
+   * Loads entries on demand.
+   * 
+   * @param <K> Key type
+   * @param <V> Value type
+   */
+  public interface EntryLoader<K, V> {
+    /**
+     * Called to load a new value for the {@code key} into an expiring map.
+     * 
+     * @param key to load a value for
+     * @return new value to load
+     */
+    V load(K key);
   }
 
   /** Map entry expiration policy. */
@@ -402,16 +452,17 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @return New ExpiringMap builder
    */
-  public static Builder builder() {
-    return new Builder();
+  public static Builder<Object, Object> builder() {
+    return new Builder<Object, Object>();
   }
 
   /**
    * Creates a new instance of ExpiringMap with ExpirationPolicy.CREATED and expiration duration of
    * 60 TimeUnit.SECONDS.
    */
+  @SuppressWarnings("unchecked")
   public static <K, V> ExpiringMap<K, V> create() {
-    return new ExpiringMap<K, V>(builder());
+    return new ExpiringMap<K, V>((Builder<K, V>) ExpiringMap.builder());
   }
 
   /**
@@ -491,9 +542,16 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       readLock.unlock();
     }
 
-    if (entry == null)
-      return null;
-    if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
+    if (entry == null) {
+      if (entryLoader == null)
+        return null;
+
+      @SuppressWarnings("unchecked")
+      K typedKey = (K) key;
+      V value = entryLoader.load(typedKey);
+      put(typedKey, value);
+      return value;
+    } else if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
       resetEntry(entry, false);
 
     return entry.getValue();
@@ -565,6 +623,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param key to put value for
    * @param value to put for key
+   * @return the old value
    * @throws NullPointerException on null key
    */
   @Override
@@ -591,6 +650,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @param value Value to put for key
    * @param duration the length of time after an entry is created that it should be removed
    * @param timeUnit the unit that {@code duration} is expressed in
+   * @return the old value
    * @throws UnsupportedOperationException If variable expiration is not enabled
    * @throws NullPointerException on null key or timeUnit
    */
