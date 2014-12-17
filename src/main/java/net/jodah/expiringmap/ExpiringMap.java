@@ -47,7 +47,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * 
  * <pre> 
  * Map<String, Integer> map = ExpiringMap.create(); 
- * Map<String, Integer> map = ExpiringMap.builder().expiration(30, TimeUnit.SECONDS).build(); 
+ * Map<String, Integer> map = ExpiringMap.builder().expiration(30, TimeUnit.SECONDS).build();
  * Map<String, Connection> map = ExpiringMap.builder()
  *   .expiration(10, TimeUnit.MINUTES)
  *   .entryLoader(new EntryLoader<String, Connection>() {

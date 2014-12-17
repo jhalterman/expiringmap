@@ -76,7 +76,7 @@ Map<String, Connection> connections = ExpiringMap.builder()
   })
   .build();
   
-// Loads a new connection into the map via the `EntryLoader`
+// Loads a new connection into the map via the EntryLoader
 connections.get("http://jodah.net");
 ```
 
