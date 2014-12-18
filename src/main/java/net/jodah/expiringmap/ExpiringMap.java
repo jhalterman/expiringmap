@@ -45,7 +45,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * <p>
  * Example usages:
  * 
- * <pre> 
+ * <pre>
+ * {@code 
  * Map<String, Integer> map = ExpiringMap.create(); 
  * Map<String, Integer> map = ExpiringMap.builder().expiration(30, TimeUnit.SECONDS).build();
  * Map<String, Connection> map = ExpiringMap.builder()
@@ -60,7 +61,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  *       connection.close();
  *     } 
  *   })
- *   .build(); 
+ *   .build();
+ * }
  * </pre>
  * 
  * @author Jonathan Halterman
@@ -387,8 +389,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     public int compareTo(ExpiringEntry<K, V> other) {
       if (key.equals(other.key))
         return 0;
-      int result = Long.valueOf(expectedExpiration.get()).compareTo(other.expectedExpiration.get());
-      return result == 0 ? 1 : result;
+      return expectedExpiration.get() < other.expectedExpiration.get() ? -1 : 1;
     }
 
     @Override
