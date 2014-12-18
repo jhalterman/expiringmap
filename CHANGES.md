@@ -4,6 +4,8 @@
 ### New Features
 
 * Added support for entry loaders. Addresses issue #4.
+* Replaced internal `Timer` with `ScheduledThreadPoolExecutor`. Addresses issue #5.
+* Added `toString()` implementation for map and entries.
 
 ### API Changes
 

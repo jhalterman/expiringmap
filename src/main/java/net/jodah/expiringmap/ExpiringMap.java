@@ -4,7 +4,6 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -14,11 +13,12 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.Timer;
-import java.util.TimerTask;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -68,12 +68,15 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @param <V> Value type
  */
 public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
-  static final Timer timer = new Timer("ExpiringMap", true);
-  static final ThreadPoolExecutor listenerService = NamedThreadFactory.decorate(
-    (ThreadPoolExecutor) Executors.newCachedThreadPool(), "ExpiringMap");
-  private static final long LISTENER_EXECUTION_THRESHOLD = 100;
+  static final ScheduledExecutorService expirer = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(
+    "ExpiringMap-Expirer"));
+  static final ThreadPoolExecutor listenerService = (ThreadPoolExecutor) Executors.newCachedThreadPool(new NamedThreadFactory(
+    "ExpiringMap-Listener-%s"));
+  /** Nanoseconds to wait for listener execution */
+  private static final long LISTENER_EXECUTION_THRESHOLD = TimeUnit.MILLISECONDS.toNanos(100);
+
   List<ExpirationListenerConfig<K, V>> expirationListeners;
-  private AtomicLong expirationMillis;
+  private AtomicLong expirationNanos;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
   private final EntryLoader<? super K, ? extends V> entryLoader;
   private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
@@ -92,11 +95,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     variableExpiration = builder.variableExpiration;
     entries = variableExpiration ? new EntryTreeHashMap<K, V>() : new EntryLinkedHashMap<K, V>();
     if (builder.expirationListeners != null)
-      expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>(
-        builder.expirationListeners);
+      expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>(builder.expirationListeners);
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
-    expirationMillis = new AtomicLong(TimeUnit.MILLISECONDS.convert(builder.duration,
-      builder.timeUnit));
+    expirationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
     entryLoader = builder.entryLoader;
   }
 
@@ -147,8 +148,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * @param listener to set
      */
     @SuppressWarnings("unchecked")
-    public <K1 extends K, V1 extends V> Builder<K1, V1> entryLoader(
-      EntryLoader<? super K1, ? super V1> loader) {
+    public <K1 extends K, V1 extends V> Builder<K1, V1> entryLoader(EntryLoader<? super K1, ? super V1> loader) {
       entryLoader = (EntryLoader<K, V>) loader;
       return (Builder<K1, V1>) this;
     }
@@ -164,8 +164,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       ExpirationListener<? super K1, ? super V1> listener) {
       if (expirationListeners == null)
         expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>();
-      expirationListeners.add(new ExpirationListenerConfig<K, V>(
-        (ExpirationListener<K, V>) listener));
+      expirationListeners.add(new ExpirationListenerConfig<K, V>((ExpirationListener<K, V>) listener));
       return (Builder<K1, V1>) this;
     }
 
@@ -180,8 +179,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       if (expirationListeners == null)
         expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>(listeners.size());
       for (ExpirationListener<? super K1, ? super V1> listener : listeners)
-        expirationListeners.add(new ExpirationListenerConfig<K, V>(
-          (ExpirationListener<K, V>) listener));
+        expirationListeners.add(new ExpirationListenerConfig<K, V>((ExpirationListener<K, V>) listener));
       return (Builder<K1, V1>) this;
     }
 
@@ -261,8 +259,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Entry LinkedHashMap implementation. */
-  static class EntryLinkedHashMap<K, V> extends LinkedHashMap<K, ExpiringEntry<K, V>> implements
-    EntryMap<K, V> {
+  static class EntryLinkedHashMap<K, V> extends LinkedHashMap<K, ExpiringEntry<K, V>> implements EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
 
     @Override
@@ -283,8 +280,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Entry TreeHashMap implementation. */
-  static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>> implements
-    EntryMap<K, V> {
+  static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>> implements EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
     SortedSet<ExpiringEntry<K, V>> sortedSet = new TreeSet<ExpiringEntry<K, V>>();
 
@@ -310,7 +306,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       ExpiringEntry<K, V> entry = super.remove(key);
       if (entry != null)
         sortedSet.remove(entry);
-
       return entry;
     }
 
@@ -359,12 +354,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   /** Expiring map entry implementation. */
   static class ExpiringEntry<K, V> implements Comparable<ExpiringEntry<K, V>> {
-    final AtomicLong expirationMillis;
-    final AtomicReference<Date> expiration;
+    final AtomicLong expirationNanos;
+    /** Epoch time at which the entry is expected to expire */
+    final AtomicLong expectedExpiration;
     final AtomicReference<ExpirationPolicy> expirationPolicy;
     final K key;
     /** Guarded by "this" */
-    volatile TimerTask timerTask;
+    volatile Future<?> entryFuture;
     /** Guarded by "this" */
     V value;
     /** Guarded by "this" */
@@ -376,23 +372,22 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * @param key for the entry
      * @param value for the entry
      * @param expirationPolicy for the entry
-     * @param expirationMillis for the entry
+     * @param expirationNanos for the entry
      */
-    ExpiringEntry(K key, V value, AtomicReference<ExpirationPolicy> expirationPolicy,
-      AtomicLong expirationMillis) {
+    ExpiringEntry(K key, V value, AtomicReference<ExpirationPolicy> expirationPolicy, AtomicLong expirationNanos) {
       this.key = key;
       this.value = value;
       this.expirationPolicy = expirationPolicy;
-      this.expirationMillis = expirationMillis;
-      this.expiration = new AtomicReference<Date>();
+      this.expirationNanos = expirationNanos;
+      this.expectedExpiration = new AtomicLong();
       resetExpiration();
     }
 
     @Override
-    public int compareTo(ExpiringEntry<K, V> pOther) {
-      if (key.equals(pOther.key))
+    public int compareTo(ExpiringEntry<K, V> other) {
+      if (key.equals(other.key))
         return 0;
-      int result = expiration.get().compareTo(pOther.expiration.get());
+      int result = Long.valueOf(expectedExpiration.get()).compareTo(other.expectedExpiration.get());
       return result == 0 ? 1 : result;
     }
 
@@ -406,6 +401,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       return key.hashCode();
     }
 
+    @Override
+    public String toString() {
+      return value.toString();
+    }
+
     /**
      * Marks the entry as canceled and resets the expiration if {@code resetExpiration} is true.
      * 
@@ -414,10 +414,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      */
     synchronized boolean cancel(boolean resetExpiration) {
       boolean result = scheduled;
-      if (timerTask != null)
-        timerTask.cancel();
+      if (entryFuture != null)
+        entryFuture.cancel(false);
 
-      timerTask = null;
+      entryFuture = null;
       scheduled = false;
 
       if (resetExpiration)
@@ -430,14 +430,14 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       return value;
     }
 
-    /** Resets the entry's expiration date. */
+    /** Resets the entry's expected expiration. */
     void resetExpiration() {
-      expiration.set(new Date(expirationMillis.get() + System.currentTimeMillis()));
+      expectedExpiration.set(expirationNanos.get() + System.nanoTime());
     }
 
     /** Marks the entry as scheduled. */
-    synchronized void schedule(TimerTask timerTask) {
-      this.timerTask = timerTask;
+    synchronized void schedule(Future<?> entryFuture) {
+      this.entryFuture = entryFuture;
       scheduled = true;
     }
 
@@ -563,7 +563,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @return The expiration duration (milliseconds)
    */
   public long getExpiration() {
-    return expirationMillis.get();
+    return TimeUnit.NANOSECONDS.toMillis(expirationNanos.get());
   }
 
   /**
@@ -585,7 +585,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (entry == null)
       throw new NoSuchElementException();
 
-    return entry.expirationMillis.get();
+    return TimeUnit.NANOSECONDS.toMillis(entry.expirationNanos.get());
   }
 
   @Override
@@ -631,14 +631,14 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (key == null)
       throw new NullPointerException();
 
-    return putInternal(key, value, expirationPolicy.get(), getExpiration());
+    return putInternal(key, value, expirationPolicy.get(), expirationNanos.get());
   }
 
   /**
    * @see this{@link #put(Object, Object, ExpirationPolicy, long, TimeUnit)}
    */
   public V put(K key, V value, ExpirationPolicy expirationPolicy) {
-    return put(key, value, expirationPolicy, expirationMillis.get(), TimeUnit.MILLISECONDS);
+    return put(key, value, expirationPolicy, expirationNanos.get(), TimeUnit.NANOSECONDS);
   }
 
   /**
@@ -661,8 +661,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (key == null || timeUnit == null)
       throw new NullPointerException();
 
-    return putInternal(key, value, expirationPolicy,
-      TimeUnit.MILLISECONDS.convert(duration, timeUnit));
+    return putInternal(key, value, expirationPolicy, TimeUnit.NANOSECONDS.convert(duration, timeUnit));
   }
 
   /**
@@ -678,7 +677,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (map == null)
       throw new NullPointerException();
 
-    long expiration = getExpiration();
+    long expiration = expirationNanos.get();
     ExpirationPolicy expirationPolicy = this.expirationPolicy.get();
 
     writeLock.lock();
@@ -695,7 +694,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     writeLock.lock();
     try {
       if (!entries.containsKey(key))
-        return putInternal(key, value, expirationPolicy.get(), getExpiration());
+        return putInternal(key, value, expirationPolicy.get(), expirationNanos.get());
       else
         return entries.get(key).getValue();
     } finally {
@@ -744,7 +743,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     writeLock.lock();
     try {
       if (entries.containsKey(key)) {
-        return putInternal(key, value, expirationPolicy.get(), getExpiration());
+        return putInternal(key, value, expirationPolicy.get(), expirationNanos.get());
       } else
         return null;
     } finally {
@@ -758,7 +757,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
       if (entry != null && entry.getValue().equals(oldValue)) {
-        putInternal(key, newValue, expirationPolicy.get(), getExpiration());
+        putInternal(key, newValue, expirationPolicy.get(), expirationNanos.get());
         return true;
       } else
         return false;
@@ -816,7 +815,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     writeLock.lock();
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
-      entry.expirationMillis.set(TimeUnit.MILLISECONDS.convert(duration, timeUnit));
+      entry.expirationNanos.set(TimeUnit.NANOSECONDS.convert(duration, timeUnit));
       resetEntry(entry, true);
     } finally {
       writeLock.unlock();
@@ -833,7 +832,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (!variableExpiration)
       throw new UnsupportedOperationException("Variable expiration is not enabled");
 
-    expirationMillis.set(TimeUnit.MILLISECONDS.convert(duration, timeUnit));
+    expirationNanos.set(TimeUnit.NANOSECONDS.convert(duration, timeUnit));
   }
 
   /**
@@ -873,6 +872,16 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     readLock.lock();
     try {
       return entries.size();
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
+  public String toString() {
+    readLock.lock();
+    try {
+      return entries.toString();
     } finally {
       readLock.unlock();
     }
@@ -934,13 +943,19 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       else if (listener.executionPolicy == 1)
         listenerService.execute(new Runnable() {
           public void run() {
-            listener.expirationListener.expired(entry.key, entry.getValue());
+            try {
+              listener.expirationListener.expired(entry.key, entry.getValue());
+            } catch (Exception ignoreUserExceptions) {
+            }
           }
         });
       else {
-        long startTime = System.currentTimeMillis();
-        listener.expirationListener.expired(entry.key, entry.getValue());
-        long endTime = System.currentTimeMillis();
+        long startTime = System.nanoTime();
+        try {
+          listener.expirationListener.expired(entry.key, entry.getValue());
+        } catch (Exception ignoreUserExceptions) {
+        }
+        long endTime = System.nanoTime();
         listener.executionPolicy = startTime + LISTENER_EXECUTION_THRESHOLD > endTime ? 0 : 1;
       }
     }
@@ -951,17 +966,16 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * previous value existed for the given key, it is first cancelled and the entries reordered to
    * reflect the new expiration.
    */
-  V putInternal(K key, V value, ExpirationPolicy expirationPolicy, long expirationMillis) {
+  V putInternal(K key, V value, ExpirationPolicy expirationPolicy, long expirationNanos) {
     writeLock.lock();
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
       V oldValue = null;
 
       if (entry == null) {
-        entry = new ExpiringEntry<K, V>(key, value,
-          variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy)
-            : this.expirationPolicy, variableExpiration ? new AtomicLong(expirationMillis)
-            : this.expirationMillis);
+        entry = new ExpiringEntry<K, V>(key, value, variableExpiration ? new AtomicReference<ExpirationPolicy>(
+          expirationPolicy) : this.expirationPolicy, variableExpiration ? new AtomicLong(expirationNanos)
+          : this.expirationNanos);
         entries.put(key, entry);
         if (entries.size() == 1 || entries.first().equals(entry))
           scheduleEntry(entry);
@@ -1011,14 +1025,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (entry == null || entry.scheduled)
       return;
 
-    TimerTask timerTask = null;
+    Runnable runnable = null;
     synchronized (entry) {
       if (entry.scheduled)
         return;
 
-      final WeakReference<ExpiringEntry<K, V>> entryReference = new WeakReference<ExpiringEntry<K, V>>(
-        entry);
-      timerTask = new TimerTask() {
+      final WeakReference<ExpiringEntry<K, V>> entryReference = new WeakReference<ExpiringEntry<K, V>>(entry);
+      runnable = new Runnable() {
         @Override
         public void run() {
           ExpiringEntry<K, V> entry = entryReference.get();
@@ -1037,7 +1050,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
               while (iterator.hasNext() && schedulePending) {
                 ExpiringEntry<K, V> nextEntry = iterator.next();
-                if (nextEntry.expiration.get().getTime() <= System.currentTimeMillis()) {
+                if (nextEntry.expectedExpiration.get() <= System.nanoTime()) {
                   iterator.remove();
                   notifyListeners(nextEntry);
                 } else {
@@ -1053,9 +1066,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         }
       };
 
-      entry.schedule(timerTask);
+      Future<?> entryFuture = expirer.schedule(runnable, entry.expectedExpiration.get() - System.nanoTime(),
+        TimeUnit.NANOSECONDS);
+      entry.schedule(entryFuture);
     }
-
-    timer.schedule(timerTask, entry.expiration.get());
   }
 }
