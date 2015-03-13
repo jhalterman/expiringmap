@@ -1,3 +1,12 @@
+# 0.4.1
+
+### New Features
+
+* Added proper support for `entrySet()`, `keyset()` and `values()`.
+
+### API Changes
+
+* Removed `valuesIterator()`. Instead use `values().iterator()`.
 
 # 0.4.0
 

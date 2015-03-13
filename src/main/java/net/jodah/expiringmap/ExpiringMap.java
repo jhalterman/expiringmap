@@ -1,9 +1,10 @@
 package net.jodah.expiringmap;
 
 import java.lang.ref.WeakReference;
+import java.util.AbstractCollection;
+import java.util.AbstractSet;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -279,6 +280,42 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     public Iterator<ExpiringEntry<K, V>> valuesIterator() {
       return values().iterator();
     }
+
+    abstract class AbstractHashIterator {
+      private final Iterator<Map.Entry<K, ExpiringEntry<K, V>>> iterator = entrySet().iterator();
+      private ExpiringEntry<K, V> next;
+
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
+
+      public ExpiringEntry<K, V> getNext() {
+        next = iterator.next().getValue();
+        return next;
+      }
+
+      public void remove() {
+        iterator.remove();
+      }
+    }
+
+    final class KeyIterator extends AbstractHashIterator implements Iterator<K> {
+      public final K next() {
+        return getNext().key;
+      }
+    }
+
+    final class ValueIterator extends AbstractHashIterator implements Iterator<V> {
+      public final V next() {
+        return getNext().value;
+      }
+    }
+
+    public final class EntryIterator extends AbstractHashIterator implements Iterator<Map.Entry<K, V>> {
+      public final Map.Entry<K, V> next() {
+        return mapEntryFor(getNext());
+      }
+    }
   }
 
   /** Entry TreeHashMap implementation. */
@@ -319,27 +356,50 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
     @Override
     public Iterator<ExpiringEntry<K, V>> valuesIterator() {
-      return new Iterator<ExpiringEntry<K, V>>() {
-        private final Iterator<ExpiringEntry<K, V>> iterator = sortedSet.iterator();
-        private ExpiringEntry<K, V> next;
+      return new ExpiringEntryIterator();
+    }
 
-        @Override
-        public boolean hasNext() {
-          return iterator.hasNext();
-        }
+    abstract class AbstractHashIterator {
+      private final Iterator<ExpiringEntry<K, V>> iterator = sortedSet.iterator();
+      protected ExpiringEntry<K, V> next;
 
-        @Override
-        public ExpiringEntry<K, V> next() {
-          next = iterator.next();
-          return next;
-        }
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
 
-        @Override
-        public void remove() {
-          EntryTreeHashMap.super.remove(next.key);
-          iterator.remove();
-        }
-      };
+      public ExpiringEntry<K, V> getNext() {
+        next = iterator.next();
+        return next;
+      }
+
+      public void remove() {
+        EntryTreeHashMap.super.remove(next.key);
+        iterator.remove();
+      }
+    }
+    
+    final class ExpiringEntryIterator extends AbstractHashIterator implements Iterator<ExpiringEntry<K, V>> {
+      public final ExpiringEntry<K, V> next() {
+        return getNext();
+      }
+    }
+
+    final class KeyIterator extends AbstractHashIterator implements Iterator<K> {
+      public final K next() {
+        return getNext().key;
+      }
+    }
+
+    final class ValueIterator extends AbstractHashIterator implements Iterator<V> {
+      public final V next() {
+        return getNext().value;
+      }
+    }
+
+    final class EntryIterator extends AbstractHashIterator implements Iterator<Map.Entry<K, V>> {
+      public final Map.Entry<K, V> next() {
+        return mapEntryFor(getNext());
+      }
     }
   }
 
@@ -512,14 +572,42 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /**
-   * Not currently supported. Use this{@link #keySet()} and this{@link #entrySetIterable()} instead.
-   * 
-   * @throws UnsupportedOperationException
-   */
   @Override
   public Set<Map.Entry<K, V>> entrySet() {
-    throw new UnsupportedOperationException();
+    return new AbstractSet<Map.Entry<K, V>>() {
+      @Override
+      public void clear() {
+        ExpiringMap.this.clear();
+      }
+
+      @Override
+      public boolean contains(Object entry) {
+        if (!(entry instanceof Map.Entry))
+          return false;
+        Map.Entry<?, ?> e = (Map.Entry<?, ?>) entry;
+        return containsKey(e.getKey());
+      }
+
+      @Override
+      public Iterator<Map.Entry<K, V>> iterator() {
+        return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new EntryIterator()
+          : ((EntryTreeHashMap<K, V>) entries).new EntryIterator();
+      }
+
+      @Override
+      public boolean remove(Object entry) {
+        if (entry instanceof Map.Entry) {
+          Map.Entry<?, ?> e = (Map.Entry<?, ?>) entry;
+          return ExpiringMap.this.remove(e.getKey()) != null;
+        }
+        return false;
+      }
+
+      @Override
+      public int size() {
+        return ExpiringMap.this.size();
+      }
+    };
   }
 
   @Override
@@ -609,13 +697,35 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  @Override
   public Set<K> keySet() {
-    readLock.lock();
-    try {
-      return entries.keySet();
-    } finally {
-      readLock.unlock();
-    }
+    return new AbstractSet<K>() {
+      @Override
+      public void clear() {
+        ExpiringMap.this.clear();
+      }
+
+      @Override
+      public boolean contains(Object key) {
+        return containsKey(key);
+      }
+
+      @Override
+      public Iterator<K> iterator() {
+        return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new KeyIterator()
+          : ((EntryTreeHashMap<K, V>) entries).new KeyIterator();
+      }
+
+      @Override
+      public boolean remove(Object value) {
+        return ExpiringMap.this.remove(value) != null;
+      }
+
+      @Override
+      public int size() {
+        return ExpiringMap.this.size();
+      }
+    };
   }
 
   /**
@@ -888,39 +998,28 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /**
-   * Not currently supported. Use {@link #valuesIterator()} instead.
-   * 
-   * @throws UnsupportedOperationException
-   */
   @Override
   public Collection<V> values() {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Returns an iterator over the map values.
-   * 
-   * @throws ConcurrentModificationException if the map's size changes while iterating, excluding
-   *           calls to {@link Iterator#remove()}.
-   */
-  public Iterator<V> valuesIterator() {
-    return new Iterator<V>() {
-      private final Iterator<ExpiringEntry<K, V>> iterator = entries.valuesIterator();
-
-      /** {@inheritDoc} */
-      public boolean hasNext() {
-        return iterator.hasNext();
+    return new AbstractCollection<V>() {
+      @Override
+      public void clear() {
+        ExpiringMap.this.clear();
       }
 
-      /** {@inheritDoc} */
-      public V next() {
-        return iterator.next().getValue();
+      @Override
+      public boolean contains(Object value) {
+        return containsValue(value);
       }
 
-      /** {@inheritDoc} */
-      public void remove() {
-        iterator.remove();
+      @Override
+      public Iterator<V> iterator() {
+        return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new ValueIterator()
+          : ((EntryTreeHashMap<K, V>) entries).new ValueIterator();
+      }
+
+      @Override
+      public int size() {
+        return ExpiringMap.this.size();
       }
     };
   }
@@ -1071,5 +1170,24 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         TimeUnit.NANOSECONDS);
       entry.schedule(entryFuture);
     }
+  }
+
+  private static <K, V> Map.Entry<K, V> mapEntryFor(final ExpiringEntry<K, V> entry) {
+    return new Map.Entry<K, V>() {
+      @Override
+      public K getKey() {
+        return entry.key;
+      }
+
+      @Override
+      public V getValue() {
+        return entry.value;
+      }
+
+      @Override
+      public V setValue(V value) {
+        throw new UnsupportedOperationException();
+      }
+    };
   }
 }
