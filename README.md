@@ -97,7 +97,7 @@ Map<String, Connection> map = ExpiringMap.builder()
 
 #### On Variable Expiration
 
-When variable expiration is disabled (default) put/remote operations are constant O(n), whereas when it is enabled put/remove operations impose a cost of O(log n).
+When variable expiration is disabled (default), `put` and `remove` operations have a constant O(n) cost. When variable expiration is enabled `put` and `remove` operations have a cost of O(log n).
 
 #### On Expiration Listeners
 
