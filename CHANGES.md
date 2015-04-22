@@ -1,3 +1,9 @@
+# 0.4.2
+
+### New Features
+
+* Added `getExpectedExpiration` to learn the remaining time left before an entry is expected to expire. Merged from pull request #9.
+
 # 0.4.1
 
 ### New Features
