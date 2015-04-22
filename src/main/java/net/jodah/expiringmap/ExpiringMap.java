@@ -677,6 +677,28 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     return TimeUnit.NANOSECONDS.toMillis(entry.expirationNanos.get());
   }
 
+  /**
+   * Gets the expected expiration in milliseconds for the entry corresponding to the given key.
+   * 
+   * @param key
+   * @return The expiration duration in milliseconds
+   * @throws NoSuchElementException If no entry exists for the given key
+   */
+  public long getExpectedExpiration(K key) {
+    ExpiringEntry<K, V> entry = null;
+    readLock.lock();
+    try {
+      entry = entries.get(key);
+    } finally {
+      readLock.unlock();
+    }
+
+    if (entry == null)
+      throw new NoSuchElementException();
+
+    return TimeUnit.NANOSECONDS.toMillis(entry.expectedExpiration.get() - System.nanoTime());
+  }
+
   @Override
   public int hashCode() {
     readLock.lock();

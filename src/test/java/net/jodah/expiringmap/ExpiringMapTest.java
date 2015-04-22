@@ -554,4 +554,23 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     assertEquals(map.get("foo"), "foo3");
     assertEquals(map.get("foo"), "foo3");
   }
+
+  /**
+   * Tests {@link ExpiringMap#getExpectedExpiration(K)}.
+   */
+  public void testExpectedExpiration() throws Exception {
+    ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
+
+    map.put("key", "value");
+
+    long exp = map.getExpectedExpiration("key");
+    assertEquals(map.getExpiration("key"), 100);
+    assertTrue(exp >= 95 && exp <= 100);
+
+    Thread.sleep(50);
+
+    exp = map.getExpectedExpiration("key");
+    assertEquals(map.getExpiration("key"), 100);
+    assertTrue(exp >= 45 && exp <= 55);
+  }
 }
