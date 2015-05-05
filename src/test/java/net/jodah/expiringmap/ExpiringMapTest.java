@@ -3,6 +3,7 @@ package net.jodah.expiringmap;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import java.util.Arrays;
@@ -52,7 +53,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   }
 
   /**
-   * Ensures that concurrent modification throws an exception.
+   * Asserts that concurrent modification throws an exception.
    */
   @Test(expectedExceptions = ConcurrentModificationException.class)
   public void testConcurrentModification() {
@@ -66,7 +67,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   }
 
   /**
-   * Tests {@link ExpiringMap#put(Object, Object)}.
+   * Tests {@link ExpiringMap#put(Object, Object)}. Asserts that values put in the map expire.
    */
   public void testPut() throws Exception {
     Map<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
@@ -79,6 +80,20 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     Thread.sleep(150);
 
     assertTrue(map.isEmpty());
+  }
+
+  /**
+   * Asserts that putting an object with the same value does not result in a reschedule.
+   */
+  public void shouldNotReschedulePutsWithSameValue() throws Exception {
+    Map<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
+
+    map.put("foo", 1);
+    Thread.sleep(50);
+    map.put("foo", 1);
+    Thread.sleep(50);
+
+    assertNull(map.get("foo"));
   }
 
   /**

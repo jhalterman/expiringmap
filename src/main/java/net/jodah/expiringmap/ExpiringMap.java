@@ -148,7 +148,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     /**
      * Sets the EntryLoader to use when loading entries.
      * 
-     * @param listener to set
+     * @param loader to set
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> entryLoader(EntryLoader<? super K1, ? super V1> loader) {
@@ -377,7 +377,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         iterator.remove();
       }
     }
-    
+
     final class ExpiringEntryIterator extends AbstractHashIterator implements Iterator<ExpiringEntry<K, V>> {
       public final ExpiringEntry<K, V> next() {
         return getNext();
@@ -540,6 +540,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     expirationListeners.add(new ExpirationListenerConfig<K, V>(listener));
   }
 
+  /** {@inheritDoc} */
   @Override
   public void clear() {
     writeLock.lock();
@@ -552,6 +553,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public boolean containsKey(Object key) {
     readLock.lock();
@@ -562,6 +564,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public boolean containsValue(Object value) {
     readLock.lock();
@@ -572,6 +575,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public Set<Map.Entry<K, V>> entrySet() {
     return new AbstractSet<Map.Entry<K, V>>() {
@@ -620,6 +624,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public V get(Object key) {
     ExpiringEntry<K, V> entry = null;
@@ -709,6 +714,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public boolean isEmpty() {
     readLock.lock();
@@ -719,6 +725,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public Set<K> keySet() {
     return new AbstractSet<K>() {
@@ -768,7 +775,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * @see this{@link #put(Object, Object, ExpirationPolicy, long, TimeUnit)}
+   * @see #put(Object, Object, ExpirationPolicy, long, TimeUnit)
    */
   public V put(K key, V value, ExpirationPolicy expirationPolicy) {
     return put(key, value, expirationPolicy, expirationNanos.get(), TimeUnit.NANOSECONDS);
@@ -798,13 +805,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * @see this{@link #put(Object, Object, ExpirationPolicy, long, TimeUnit)}
+   * @see #put(Object, Object, ExpirationPolicy, long, TimeUnit)
    */
   public V put(K key, V value, long duration, TimeUnit timeUnit) {
     return put(key, value, expirationPolicy.get(), duration, timeUnit);
   }
 
-  /** @see this{@link #put(Object, Object)}. */
+  /** {@inheritDoc} */
   @Override
   public void putAll(Map<? extends K, ? extends V> map) {
     if (map == null)
@@ -822,6 +829,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public V putIfAbsent(K key, V value) {
     writeLock.lock();
@@ -835,6 +843,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public V remove(Object key) {
     ExpiringEntry<K, V> entry = null;
@@ -854,6 +863,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     return entry.getValue();
   }
 
+  /** {@inheritDoc} */
   @Override
   public boolean remove(Object key, Object value) {
     writeLock.lock();
@@ -871,6 +881,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public V replace(K key, V value) {
     writeLock.lock();
@@ -884,6 +895,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public boolean replace(K key, V oldValue, V newValue) {
     writeLock.lock();
@@ -1000,6 +1012,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       entry.expirationPolicy.set(expirationPolicy);
   }
 
+  /** {@inheritDoc} */
   @Override
   public int size() {
     readLock.lock();
@@ -1020,6 +1033,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public Collection<V> values() {
     return new AbstractCollection<V>() {
@@ -1103,7 +1117,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
           scheduleEntry(entry);
       } else {
         oldValue = entry.getValue();
-        if ((oldValue == null && value == null) || (oldValue != null && oldValue.equals(value)))
+        if (!ExpirationPolicy.ACCESSED.equals(expirationPolicy)
+          && ((oldValue == null && value == null) || (oldValue != null && oldValue.equals(value))))
           return value;
 
         entry.setValue(value);
