@@ -47,7 +47,7 @@ Map<String, Connection> map = ExpiringMap.builder()
 Entries can have individually variable expiration durations and policies:
 
 ```java
-Map<String, String> map = ExpiringMap.builder()
+ExpiringMap<String, String> map = ExpiringMap.builder()
   .variableExpiration()
   .build();
 
