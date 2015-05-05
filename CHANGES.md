@@ -1,3 +1,9 @@
+# 0.4.3
+
+### Bug Fixes
+
+* Fixed #12 - Idempotent puts should reset expiration when `ExpirationPolicy` is `ACCESSSED`.
+
 # 0.4.2
 
 ### New Features
