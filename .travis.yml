@@ -3,7 +3,7 @@ language:
 jdk:
   - oraclejdk8
 install:
-  - mvn test-compile -DskipTests=true -Dgpg.skip=true -Dmaven.javadoc.skip=true -B -V
+  - mvn test-compile -DskipTests=true -Dmaven.javadoc.skip=true -B -V
 script:
   - mvn test jacoco:report
 after_success:
