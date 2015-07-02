@@ -406,6 +406,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   /** Provides an expiration listener configuration. */
   static class ExpirationListenerConfig<K, V> {
     final ExpirationListener<K, V> expirationListener;
+    /** -1 = initial, 0 = synchronous, 1 = asynchronous */
     int executionPolicy = -1;
 
     /** Constructs a new ExpirationListenerConfig. */
@@ -1074,8 +1075,19 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       return;
 
     for (final ExpirationListenerConfig<K, V> listener : expirationListeners) {
-      if (listener.executionPolicy == 0)
-        listener.expirationListener.expired(entry.key, entry.getValue());
+      if (listener.executionPolicy == -1) {
+        long startTime = System.nanoTime();
+        try {
+          listener.expirationListener.expired(entry.key, entry.getValue());
+        } catch (Exception ignoreUserExceptions) {
+        }
+        long endTime = System.nanoTime();
+        listener.executionPolicy = startTime + LISTENER_EXECUTION_THRESHOLD > endTime ? 0 : 1;
+      } else if (listener.executionPolicy == 0)
+        try {
+          listener.expirationListener.expired(entry.key, entry.getValue());
+        } catch (Exception ignoreUserExceptions) {
+        }
       else if (listener.executionPolicy == 1)
         listenerService.execute(new Runnable() {
           public void run() {
@@ -1085,15 +1097,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
             }
           }
         });
-      else {
-        long startTime = System.nanoTime();
-        try {
-          listener.expirationListener.expired(entry.key, entry.getValue());
-        } catch (Exception ignoreUserExceptions) {
-        }
-        long endTime = System.nanoTime();
-        listener.executionPolicy = startTime + LISTENER_EXECUTION_THRESHOLD > endTime ? 0 : 1;
-      }
     }
   }
 
