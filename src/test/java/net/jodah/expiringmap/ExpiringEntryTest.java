@@ -3,7 +3,6 @@ package net.jodah.expiringmap;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 
-import java.util.Map.Entry;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
@@ -12,7 +11,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import net.jodah.expiringmap.ExpiringMap.ExpirationPolicy;
 import net.jodah.expiringmap.ExpiringMap.ExpiringEntry;
-
 import org.testng.annotations.Test;
 
 /**
@@ -20,7 +18,7 @@ import org.testng.annotations.Test;
  */
 public class ExpiringEntryTest {
   /**
-   * Tests that entry ordering via {@link ExpiringEntry#compareTo(Entry)} is as expected.
+   * Tests that entry ordering via {@link ExpiringEntry#compareTo(ExpiringEntry)} is as expected.
    */
   @Test
   public void testEntryOrdering() {
@@ -49,7 +47,7 @@ public class ExpiringEntryTest {
 
   /**
    * Tests that replacement of entries in a set is as expected per ordering via
-   * {@link ExpiringEntry#compareTo(Entry)}.
+   * {@link ExpiringEntry#compareTo(ExpiringEntry)}.
    */
   @Test
   public void testEntryReplaceSameKey() {

@@ -571,7 +571,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   }
 
   /**
-   * Tests {@link ExpiringMap#getExpectedExpiration(K)}.
+   * Tests {@link ExpiringMap#getExpectedExpiration(Object)}.
    */
   public void testExpectedExpiration() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
