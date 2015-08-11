@@ -98,7 +98,7 @@
     <dependency>
       <groupId>net.jodah</groupId>
       <artifactId>concurrentunit</artifactId>
-      <version>0.3.2</version>
+      <version>0.4.1</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -116,7 +116,7 @@
               <author>false</author>
               <protected>true</protected>
               <excludePackageNames>*.internal:*.internal.*</excludePackageNames>
-              <reportOutputDirectory>docs</reportOutputDirectory>
+              <reportOutputDirectory>target/docs</reportOutputDirectory>
               <destDir>javadoc</destDir>
             </configuration>
           </plugin>
