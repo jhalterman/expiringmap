@@ -123,9 +123,11 @@ public class ExpiringMapTest extends ConcurrentTestCase {
             map.put("key" + random.nextInt(5), System.currentTimeMillis());
             Thread.sleep(1);
           }
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
           threadFail(e);
-        } finally {
+        }
+        finally {
           resume();
         }
       }
@@ -214,9 +216,11 @@ public class ExpiringMapTest extends ConcurrentTestCase {
             maps[mapRandom.nextInt(mapCount)].put("key" + keyRandom.nextInt(1000), System.currentTimeMillis());
             Thread.sleep(sleepRandom.nextInt(2) + 1);
           }
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
           threadFail(e);
-        } finally {
+        }
+        finally {
           resume();
         }
       }
@@ -571,6 +575,38 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   }
 
   /**
+   * Verifies that entries are loaded from an ExpiringEntryLoader.
+   */
+  public void shouldLoadExpiringEntries() throws Exception {
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+      .expiringEntryLoader(new ExpiringMap.ExpiringEntryLoader<String, String>() {
+        int count;
+
+        @Override
+        public ExpiringValue<String> load(String key) {
+          return ExpiringValue.<String>builder()
+              .value(key + ++count)
+              .duration(100 * count)
+              .timeUnit(TimeUnit.MILLISECONDS)
+              .build();
+        }
+      })
+      .build();
+
+    assertEquals(map.get("foo"), "foo1");
+    assertEquals(map.get("foo"), "foo1");
+    assertEquals(map.getExpiration("foo"), 100);
+    assertEquals(map.get("bar"), "bar2");
+    assertEquals(map.get("bar"), "bar2");
+    map.remove("foo");
+    assertEquals(map.get("foo"), "foo3");
+    assertEquals(map.get("foo"), "foo3");
+
+    map.get("baz");
+    assertEquals(map.getExpiration("baz"), 400);
+  }
+
+  /**
    * Tests {@link ExpiringMap#getExpectedExpiration(Object)}.
    */
   public void testExpectedExpiration() throws Exception {
@@ -587,5 +623,23 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     exp = map.getExpectedExpiration("key");
     assertEquals(map.getExpiration("key"), 100);
     assertTrue(exp >= 45 && exp <= 55);
+  }
+
+  @Test(expectedExceptions = IllegalArgumentException.class)
+  public void behaviorWhenBothTypesOfLoadersProvided() {
+    ExpiringMap.builder()
+        .entryLoader(new EntryLoader<Object, Object>() {
+          @Override
+          public Object load(Object key) {
+            return null;
+          }
+        })
+        .expiringEntryLoader(new ExpiringMap.ExpiringEntryLoader<Object, Object>() {
+          @Override
+          public ExpiringValue<Object> load(Object key) {
+            return null;
+          }
+        })
+        .build();
   }
 }

@@ -82,6 +82,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   private AtomicLong expirationNanos;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
   private final EntryLoader<? super K, ? extends V> entryLoader;
+  private final ExpiringEntryLoader<? super K, ? extends V> expiringEntryLoader;
   private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
   private final Lock readLock = readWriteLock.readLock();
   private final Lock writeLock = readWriteLock.writeLock();
@@ -94,14 +95,22 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param builder The map builder
    */
-  private ExpiringMap(Builder<K, V> builder) {
+  private ExpiringMap(final Builder<K, V> builder) {
     variableExpiration = builder.variableExpiration;
     entries = variableExpiration ? new EntryTreeHashMap<K, V>() : new EntryLinkedHashMap<K, V>();
     if (builder.expirationListeners != null)
       expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>(builder.expirationListeners);
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
     expirationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
-    entryLoader = builder.entryLoader;
+    if (builder.entryLoader != null && builder.expiringEntryLoader != null) {
+      throw new IllegalArgumentException("Either entryLoader or expiringEntryLoader may be set, not both");
+    } else if (builder.entryLoader != null) {
+      entryLoader = builder.entryLoader;
+      expiringEntryLoader = null;
+    } else {
+      entryLoader = null;
+      expiringEntryLoader = builder.expiringEntryLoader;
+    }
   }
 
   /**
@@ -115,6 +124,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     private boolean variableExpiration;
     private long duration = 60;
     private EntryLoader<K, V> entryLoader;
+    private ExpiringEntryLoader<K, V> expiringEntryLoader;
 
     /**
      * Creates a new Builder object.
@@ -153,6 +163,19 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> entryLoader(EntryLoader<? super K1, ? super V1> loader) {
       entryLoader = (EntryLoader<K, V>) loader;
+      return (Builder<K1, V1>) this;
+    }
+
+    /**
+     * Sets the ExpiringEntryLoader to use when loading entries.
+     *
+     * @param loader to set
+     */
+    @SuppressWarnings("unchecked")
+    public <K1 extends K, V1 extends V> Builder<K1, V1> expiringEntryLoader(
+        ExpiringEntryLoader<? super K1, ? super V1> loader) {
+      variableExpiration();
+      expiringEntryLoader = (ExpiringEntryLoader<K, V>) loader;
       return (Builder<K1, V1>) this;
     }
 
@@ -235,6 +258,22 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * @return new value to load
      */
     V load(K key);
+  }
+
+  /**
+   * Loads entries on demand, with control over each value's expiry duration (i.e. variable expiration).
+   *
+   * @param <K> Key type
+   * @param <V> Value type
+   */
+  public interface ExpiringEntryLoader<K, V> {
+    /**
+     * Called to load a new value for the {@code key} into an expiring map.
+     *
+     * @param key to load a value for
+     * @return contains new value to load along with its expiry duration
+     */
+    ExpiringValue<V> load(K key);
   }
 
   /** Map entry expiration policy. */
@@ -638,18 +677,27 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     if (entry == null) {
-      if (entryLoader == null)
-        return null;
-
       @SuppressWarnings("unchecked")
       K typedKey = (K) key;
-      V value = entryLoader.load(typedKey);
-      put(typedKey, value);
-      return value;
+      return load(typedKey);
     } else if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
       resetEntry(entry, false);
 
     return entry.getValue();
+  }
+
+  private V load(K key) {
+    if (entryLoader == null && expiringEntryLoader == null) {
+      return null;
+    } else if (entryLoader != null) {
+      V value = entryLoader.load(key);
+      put(key, value);
+      return value;
+    } else {
+      ExpiringValue<? extends V> expiringValue = expiringEntryLoader.load(key);
+      put(key, expiringValue.getValue(), expiringValue.getDuration(), expiringValue.getTimeUnit());
+      return expiringValue.getValue();
+    }
   }
 
   /**
