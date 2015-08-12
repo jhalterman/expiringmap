@@ -699,7 +699,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         put(key, null);
         return null;
       } else {
-        expiringValue.put(this, key);
+        long duration = expiringValue.getTimeUnit() == null ? expirationNanos.get() : expiringValue.getDuration();
+        TimeUnit timeUnit = expiringValue.getTimeUnit() == null ? TimeUnit.NANOSECONDS : expiringValue.getTimeUnit();
+        put(key, expiringValue.getValue(),
+            expiringValue.getExpirationPolicy() == null ? expirationPolicy.get() : expiringValue.getExpirationPolicy(),
+          duration, timeUnit);
         return expiringValue.getValue();
       }
     }

@@ -585,7 +585,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
 
         @Override
         public ExpiringValue<String> load(String key) {
-          return ExpiringValue.of(key + ++count, 100 * count, TimeUnit.MILLISECONDS);
+          return new ExpiringValue<String>(key + ++count, 100 * count, TimeUnit.MILLISECONDS);
         }
       })
       .build();
@@ -607,13 +607,15 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     long mapDefaultDuration = 100;
     ExpirationPolicy mapDefaultPolicy = ExpirationPolicy.CREATED;
 
-    final ExpiringValue<String> useAllDefaults = ExpiringValue.of("useAllDefaults");
-    final ExpiringValue<String> useDefaultPolicy = ExpiringValue.of("useDefaultPolicy",
+    final ExpiringValue<String> useAllDefaults = new ExpiringValue<String>("useAllDefaults");
+    final ExpiringValue<String> useDefaultPolicy = new ExpiringValue<String>("useDefaultPolicy",
       mapDefaultDuration * 2, TimeUnit.MILLISECONDS);
-    final ExpiringValue<String> useDefaultDuration = ExpiringValue.of("useDefaultDuration",
+    final ExpiringValue<String> useDefaultDuration = new ExpiringValue<String>("useDefaultDuration",
       ExpirationPolicy.ACCESSED);
-    final ExpiringValue<String> useNoDefaults = ExpiringValue.of("useNoDefaults",
-      ExpirationPolicy.ACCESSED, mapDefaultDuration * 3, TimeUnit.MILLISECONDS);
+    final ExpiringValue<String> useNoDefaults = new ExpiringValue<String>("useNoDefaults",
+                                                                          ExpirationPolicy.ACCESSED,
+                                                                          mapDefaultDuration * 3,
+                                                                          TimeUnit.MILLISECONDS);
 
     ExpiringMap<String, String> map = ExpiringMap.builder()
         .expirationPolicy(mapDefaultPolicy)
