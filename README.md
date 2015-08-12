@@ -5,18 +5,6 @@
 
 A high performance, low-overhead, zero dependency, thread-safe [ConcurrentMap](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ConcurrentMap.html) implementation that expires entries. Features include expiration policies, variable entry settings, expiration listeners, and lazy entry loading.
 
-## Setup
-
-Add ExpiringMap as a Maven dependency:
-
-```xml
-<dependency>
-  <groupId>net.jodah</groupId>
-  <artifactId>expiringmap</artifactId>
-  <version>0.4.3</version>
-</dependency>
-```
-
 ## Usage
 
 By default, ExpiringMap expires entries 60 seconds from creation:
@@ -83,6 +71,18 @@ Map<String, Connection> connections = ExpiringMap.builder()
 connections.get("http://jodah.net");
 ```
 
+Lazily loaded entries can also be made to expire at varying times:
+
+```java
+Map<String, Connection> connections = ExpiringMap.builder()
+  .expiringEntry(new ExpiringEntryLoader<String, Connection>() {
+    public ExpiringValue<Connection> load(String address) {
+      return new ExpiringValue(new Connection(address), 5, TimeUnit.MINUTES);
+    }
+  })
+  .build();
+```
+
 #### Expiration Listeners
 
 Finally, expiration listeners can be notified when an entry expires:
@@ -104,9 +104,7 @@ When variable expiration is disabled (default), `put` and `remove` operations ha
 
 #### On Expiration Listeners
 
-Expiration listeners should avoid blocking or synchronizing on shared resources since they are initially invoked from within the context of the ExpiringMap's lone Timer thread. Given this, any expiration listener whose invocation duration exceeds a set threshold will thereafter be invoked from a separate thread pool to prevent entry expirations from stacking up in the Timer thread.
-
-Nevertheless, ExpiringMap is still susceptible to ExpirationListener notifications stacking up internally if they are not processed in a timely manner.
+Expiration listeners should perform work quickly and avoid blocking since they are invoked by default by the ExpiringMap's Timer thread which is also used to expire entries. If an Expration listener blocks or fails to return quickly, ExpiringMap may not be able to expire entries on time. To handle this, any expiration listener whose invocation duration exceeds a set threshold will thereafter be invoked from a separate thread pool to prevent entry expirations from stacking up in the Timer thread.
 
 ## Docs
 
@@ -114,4 +112,4 @@ JavaDocs are available [here](https://jhalterman.github.com/expiringmap/javadoc)
 
 ## License
 
-Copyright 2009-2014 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
+Copyright 2009-2015 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
