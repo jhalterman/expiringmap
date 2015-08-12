@@ -695,23 +695,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       return value;
     } else {
       ExpiringValue<? extends V> expiringValue = expiringEntryLoader.load(key);
-      putExpiringValue(key, expiringValue);
-      return expiringValue == null ? null : expiringValue.getValue();
-    }
-  }
-
-  private void putExpiringValue(K key, ExpiringValue<? extends V> expiringValue) {
-    if (expiringValue == null) {
-      put(key, null);
-    } else if (expiringValue.getExpirationPolicy() != null && expiringValue.getTimeUnit() != null) {
-      put(key, expiringValue.getValue(), expiringValue.getExpirationPolicy(), expiringValue.getDuration(),
-        expiringValue.getTimeUnit());
-    } else if (expiringValue.getExpirationPolicy() != null) {
-      put(key, expiringValue.getValue(), expiringValue.getExpirationPolicy());
-    } else if (expiringValue.getTimeUnit() != null) {
-      put(key, expiringValue.getValue(), expiringValue.getDuration(), expiringValue.getTimeUnit());
-    } else {
-      put(key, expiringValue.getValue());
+      if (expiringValue == null) {
+        put(key, null);
+        return null;
+      } else {
+        expiringValue.put(this, key);
+        return expiringValue.getValue();
+      }
     }
   }
 
