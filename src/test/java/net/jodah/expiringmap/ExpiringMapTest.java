@@ -6,21 +6,23 @@ import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+
+import org.testng.annotations.Test;
 
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import net.jodah.expiringmap.ExpiringMap.EntryLoader;
 import net.jodah.expiringmap.ExpiringMap.ExpirationListener;
 import net.jodah.expiringmap.ExpiringMap.ExpirationPolicy;
-
-import org.testng.annotations.Test;
 
 /**
  * Tests {@link ExpiringMap}.
@@ -90,9 +92,9 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     Map<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
 
     map.put("foo", 1);
-    Thread.sleep(50);
+    Thread.sleep(55);
     map.put("foo", 1);
-    Thread.sleep(50);
+    Thread.sleep(55);
 
     assertNull(map.get("foo"));
   }
@@ -106,14 +108,14 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     int threadCount = 5;
 
     final ExpiringMap<String, Long> map = ExpiringMap.builder()
-      .expiration(duration, TimeUnit.MILLISECONDS)
-      .expirationListener(new ExpirationListener<String, Long>() {
-        public void expired(String key, Long startTime) {
-          if (key.equals(finalKey))
-            resume();
-        }
-      })
-      .build();
+        .expiration(duration, TimeUnit.MILLISECONDS)
+        .expirationListener(new ExpirationListener<String, Long>() {
+          public void expired(String key, Long startTime) {
+            if (key.equals(finalKey))
+              resume();
+          }
+        })
+        .build();
 
     threadedRun(threadCount, new Runnable() {
       public void run() {
@@ -124,11 +126,9 @@ public class ExpiringMapTest extends ConcurrentTestCase {
             map.put("key" + random.nextInt(5), System.currentTimeMillis());
             Thread.sleep(1);
           }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
           threadFail(e);
-        }
-        finally {
+        } finally {
           resume();
         }
       }
@@ -152,8 +152,8 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   }
 
   /**
-   * Performs 10000 puts in each of 50 threads across 10 maps and ensures that expiration times are
-   * within 1/10s of expected times.
+   * Performs 10000 puts in each of 50 threads across 10 maps and ensures that expiration times are within 1/10s of
+   * expected times.
    */
   @Test(enabled = false)
   public void test50ThreadsAcross10MapsWith1SecondExpiration() throws Throwable {
@@ -161,8 +161,8 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   }
 
   /**
-   * Performs 10000 puts in each of 20 threads across 50 maps and ensures that expiration times are
-   * within 1/10s of expected times.
+   * Performs 10000 puts in each of 20 threads across 50 maps and ensures that expiration times are within 1/10s of
+   * expected times.
    */
   @Test(enabled = false)
   public void test20ThreadsAcross50MapsWith1SecondExpiration() throws Throwable {
@@ -178,8 +178,8 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   }
 
   /**
-   * A test that performs 10000 puts in each of {@code threadCount} threads across {@code mapCount}
-   * maps and asserts that expiration times are within 1/10th of a second of the expected times.
+   * A test that performs 10000 puts in each of {@code threadCount} threads across {@code mapCount} maps and asserts
+   * that expiration times are within 1/10th of a second of the expected times.
    * 
    * <p>
    * Note: Thread puts timeout at 60 seconds.
@@ -199,8 +199,8 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     };
 
     ExpiringMap.Builder builder = ExpiringMap.builder()
-      .expiration(duration, TimeUnit.MILLISECONDS)
-      .expirationListener(expirationListener);
+        .expiration(duration, TimeUnit.MILLISECONDS)
+        .expirationListener(expirationListener);
     final ExpiringMap[] maps = new ExpiringMap[mapCount];
 
     for (int i = 0; i < mapCount; i++)
@@ -217,11 +217,9 @@ public class ExpiringMapTest extends ConcurrentTestCase {
             maps[mapRandom.nextInt(mapCount)].put("key" + keyRandom.nextInt(1000), System.currentTimeMillis());
             Thread.sleep(sleepRandom.nextInt(2) + 1);
           }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
           threadFail(e);
-        }
-        finally {
+        } finally {
           resume();
         }
       }
@@ -246,15 +244,15 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     final String value = "v";
 
     Map<String, String> map = ExpiringMap.builder()
-      .expiration(100, TimeUnit.MILLISECONDS)
-      .expirationListener(new ExpirationListener<String, String>() {
-        public void expired(String thekey, String thevalue) {
-          threadAssertEquals(key, thekey);
-          threadAssertEquals(value, thevalue);
-          resume();
-        }
-      })
-      .build();
+        .expiration(100, TimeUnit.MILLISECONDS)
+        .expirationListener(new ExpirationListener<String, String>() {
+          public void expired(String thekey, String thevalue) {
+            threadAssertEquals(key, thekey);
+            threadAssertEquals(value, thevalue);
+            resume();
+          }
+        })
+        .build();
 
     map.put(key, value);
 
@@ -377,9 +375,9 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    */
   public void testSetExpiration() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder()
-      .variableExpiration()
-      .expiration(100, TimeUnit.MILLISECONDS)
-      .build();
+        .variableExpiration()
+        .expiration(100, TimeUnit.MILLISECONDS)
+        .build();
     map.put("a", "a");
     Thread.sleep(150);
     assertTrue(map.isEmpty());
@@ -396,9 +394,9 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    */
   public void testSetExpirationPolicy() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder()
-      .variableExpiration()
-      .expiration(100, TimeUnit.MILLISECONDS)
-      .build();
+        .variableExpiration()
+        .expiration(100, TimeUnit.MILLISECONDS)
+        .build();
     map.put("a", "a");
     map.put("b", "b");
     map.put("c", "c");
@@ -423,9 +421,9 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    */
   public void testEntrySetExpirationPolicy() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder()
-      .variableExpiration()
-      .expiration(100, TimeUnit.MILLISECONDS)
-      .build();
+        .variableExpiration()
+        .expiration(100, TimeUnit.MILLISECONDS)
+        .build();
     map.put("a", "a");
     map.put("b", "b");
     map.put("c", "c");
@@ -555,16 +553,16 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    */
   public void shouldLoadEntries() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder()
-      .expiration(100, TimeUnit.MILLISECONDS)
-      .entryLoader(new EntryLoader<String, String>() {
-        int count;
+        .expiration(100, TimeUnit.MILLISECONDS)
+        .entryLoader(new EntryLoader<String, String>() {
+          int count;
 
-        @Override
-        public String load(String key) {
-          return key + ++count;
-        }
-      })
-      .build();
+          @Override
+          public String load(String key) {
+            return key + ++count;
+          }
+        })
+        .build();
 
     assertEquals(map.get("foo"), "foo1");
     assertEquals(map.get("foo"), "foo1");
@@ -580,15 +578,15 @@ public class ExpiringMapTest extends ConcurrentTestCase {
    */
   public void shouldLoadExpiringEntries() throws Exception {
     ExpiringMap<String, String> map = ExpiringMap.builder()
-      .expiringEntryLoader(new ExpiringMap.ExpiringEntryLoader<String, String>() {
-        int count;
+        .expiringEntryLoader(new ExpiringMap.ExpiringEntryLoader<String, String>() {
+          int count;
 
-        @Override
-        public ExpiringValue<String> load(String key) {
-          return new ExpiringValue<String>(key + ++count, 100 * count, TimeUnit.MILLISECONDS);
-        }
-      })
-      .build();
+          @Override
+          public ExpiringValue<String> load(String key) {
+            return new ExpiringValue<String>(key + ++count, 100 * count, TimeUnit.MILLISECONDS);
+          }
+        })
+        .build();
 
     assertEquals(map.get("foo"), "foo1");
     assertEquals(map.get("foo"), "foo1");
@@ -608,14 +606,12 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     ExpirationPolicy mapDefaultPolicy = ExpirationPolicy.CREATED;
 
     final ExpiringValue<String> useAllDefaults = new ExpiringValue<String>("useAllDefaults");
-    final ExpiringValue<String> useDefaultPolicy = new ExpiringValue<String>("useDefaultPolicy",
-      mapDefaultDuration * 2, TimeUnit.MILLISECONDS);
+    final ExpiringValue<String> useDefaultPolicy = new ExpiringValue<String>("useDefaultPolicy", mapDefaultDuration * 2,
+        TimeUnit.MILLISECONDS);
     final ExpiringValue<String> useDefaultDuration = new ExpiringValue<String>("useDefaultDuration",
-      ExpirationPolicy.ACCESSED);
-    final ExpiringValue<String> useNoDefaults = new ExpiringValue<String>("useNoDefaults",
-                                                                          ExpirationPolicy.ACCESSED,
-                                                                          mapDefaultDuration * 3,
-                                                                          TimeUnit.MILLISECONDS);
+        ExpirationPolicy.ACCESSED);
+    final ExpiringValue<String> useNoDefaults = new ExpiringValue<String>("useNoDefaults", ExpirationPolicy.ACCESSED,
+        mapDefaultDuration * 3, TimeUnit.MILLISECONDS);
 
     ExpiringMap<String, String> map = ExpiringMap.builder()
         .expirationPolicy(mapDefaultPolicy)
@@ -625,17 +621,13 @@ public class ExpiringMapTest extends ConcurrentTestCase {
           public ExpiringValue<String> load(String key) {
             if (key.equals("useAllDefaults")) {
               return useAllDefaults;
-            }
-            else if (key.equals("useDefaultPolicy")) {
+            } else if (key.equals("useDefaultPolicy")) {
               return useDefaultPolicy;
-            }
-            else if (key.equals("useDefaultDuration")) {
+            } else if (key.equals("useDefaultDuration")) {
               return useDefaultDuration;
-            }
-            else if (key.equals("useNoDefaults")) {
+            } else if (key.equals("useNoDefaults")) {
               return useNoDefaults;
-            }
-            else {
+            } else {
               throw new IllegalStateException("Unexpected get");
             }
           }
@@ -681,29 +673,29 @@ public class ExpiringMapTest extends ConcurrentTestCase {
 
     long exp = map.getExpectedExpiration("key");
     assertEquals(map.getExpiration("key"), 100);
-    assertTrue(exp >= 95 && exp <= 100);
+    assertTrue(exp > 0 && exp < 100);
 
-    Thread.sleep(50);
+    Thread.sleep(100);
 
-    exp = map.getExpectedExpiration("key");
-    assertEquals(map.getExpiration("key"), 100);
-    assertTrue(exp >= 45 && exp <= 55);
+    try {
+      exp = map.getExpectedExpiration("key");
+      fail();
+    } catch (NoSuchElementException expected) {
+    }
   }
 
   @Test(expectedExceptions = IllegalStateException.class)
   public void behaviorWhenBothTypesOfLoadersProvided() {
-    ExpiringMap.builder()
-        .entryLoader(new EntryLoader<Object, Object>() {
-          @Override
-          public Object load(Object key) {
-            return null;
-          }
-        })
-        .expiringEntryLoader(new ExpiringMap.ExpiringEntryLoader<Object, Object>() {
-          @Override
-          public ExpiringValue<Object> load(Object key) {
-            return null;
-          }
-        });
+    ExpiringMap.builder().entryLoader(new EntryLoader<Object, Object>() {
+      @Override
+      public Object load(Object key) {
+        return null;
+      }
+    }).expiringEntryLoader(new ExpiringMap.ExpiringEntryLoader<Object, Object>() {
+      @Override
+      public ExpiringValue<Object> load(Object key) {
+        return null;
+      }
+    });
   }
 }
