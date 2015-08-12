@@ -82,6 +82,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   private AtomicLong expirationNanos;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
   private final EntryLoader<? super K, ? extends V> entryLoader;
+  private final ExpiringEntryLoader<? super K, ? extends V> expiringEntryLoader;
   private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
   private final Lock readLock = readWriteLock.readLock();
   private final Lock writeLock = readWriteLock.writeLock();
@@ -94,7 +95,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param builder The map builder
    */
-  private ExpiringMap(Builder<K, V> builder) {
+  private ExpiringMap(final Builder<K, V> builder) {
     variableExpiration = builder.variableExpiration;
     entries = variableExpiration ? new EntryTreeHashMap<K, V>() : new EntryLinkedHashMap<K, V>();
     if (builder.expirationListeners != null)
@@ -102,6 +103,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
     expirationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
     entryLoader = builder.entryLoader;
+    expiringEntryLoader = builder.expiringEntryLoader;
   }
 
   /**
@@ -115,6 +117,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     private boolean variableExpiration;
     private long duration = 60;
     private EntryLoader<K, V> entryLoader;
+    private ExpiringEntryLoader<K, V> expiringEntryLoader;
 
     /**
      * Creates a new Builder object.
@@ -146,13 +149,34 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     /**
-     * Sets the EntryLoader to use when loading entries.
+     * Sets the EntryLoader to use when loading entries. Either an EntryLoader or ExpiringEntryLoader may be set,
+     * not both.
      * 
      * @param loader to set
+     * @throws IllegalStateException if an {@link #expiringEntryLoader(ExpiringEntryLoader) ExpiringEntryLoader}
+     * is set
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> entryLoader(EntryLoader<? super K1, ? super V1> loader) {
       entryLoader = (EntryLoader<K, V>) loader;
+      validateAtMostOneLoader();
+      return (Builder<K1, V1>) this;
+    }
+
+    /**
+     * Sets the ExpiringEntryLoader to use when loading entries and configures
+     * {@link #variableExpiration() variable expiration}. Either an EntryLoader or ExpiringEntryLoader may
+     * be set, not both.
+     *
+     * @param loader to set
+     * @throws IllegalStateException if an {@link #entryLoader(EntryLoader) EntryLoader} is set
+     */
+    @SuppressWarnings("unchecked")
+    public <K1 extends K, V1 extends V> Builder<K1, V1> expiringEntryLoader(
+        ExpiringEntryLoader<? super K1, ? super V1> loader) {
+      expiringEntryLoader = (ExpiringEntryLoader<K, V>) loader;
+      validateAtMostOneLoader();
+      variableExpiration();
       return (Builder<K1, V1>) this;
     }
 
@@ -203,6 +227,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       variableExpiration = true;
       return this;
     }
+
+    private void validateAtMostOneLoader() {
+      if (entryLoader != null && expiringEntryLoader != null) {
+        throw new IllegalStateException("Either entryLoader or expiringEntryLoader may be set, not both");
+      }
+    }
   }
 
   /**
@@ -235,6 +265,22 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * @return new value to load
      */
     V load(K key);
+  }
+
+  /**
+   * Loads entries on demand, with control over each value's expiry duration (i.e. variable expiration).
+   *
+   * @param <K> Key type
+   * @param <V> Value type
+   */
+  public interface ExpiringEntryLoader<K, V> {
+    /**
+     * Called to load a new value for the {@code key} into an expiring map.
+     *
+     * @param key to load a value for
+     * @return contains new value to load along with its expiry duration
+     */
+    ExpiringValue<V> load(K key);
   }
 
   /** Map entry expiration policy. */
@@ -628,28 +674,39 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   /** {@inheritDoc} */
   @Override
   public V get(Object key) {
-    ExpiringEntry<K, V> entry = null;
-
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry == null) {
-      if (entryLoader == null)
-        return null;
-
       @SuppressWarnings("unchecked")
       K typedKey = (K) key;
-      V value = entryLoader.load(typedKey);
-      put(typedKey, value);
-      return value;
+      return load(typedKey);
     } else if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
       resetEntry(entry, false);
 
     return entry.getValue();
+  }
+
+  private V load(K key) {
+    if (entryLoader == null && expiringEntryLoader == null) {
+      return null;
+    } else if (entryLoader != null) {
+      V value = entryLoader.load(key);
+      put(key, value);
+      return value;
+    } else {
+      ExpiringValue<? extends V> expiringValue = expiringEntryLoader.load(key);
+      if (expiringValue == null) {
+        put(key, null);
+        return null;
+      } else {
+        long duration = expiringValue.getTimeUnit() == null ? expirationNanos.get() : expiringValue.getDuration();
+        TimeUnit timeUnit = expiringValue.getTimeUnit() == null ? TimeUnit.NANOSECONDS : expiringValue.getTimeUnit();
+        put(key, expiringValue.getValue(),
+            expiringValue.getExpirationPolicy() == null ? expirationPolicy.get() : expiringValue.getExpirationPolicy(),
+          duration, timeUnit);
+        return expiringValue.getValue();
+      }
+    }
   }
 
   /**
@@ -669,13 +726,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @throws NoSuchElementException If no entry exists for the given key
    */
   public long getExpiration(K key) {
-    ExpiringEntry<K, V> entry = null;
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry == null)
       throw new NoSuchElementException();
@@ -691,13 +742,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @throws NoSuchElementException If no entry exists for the given key
    */
   public long getExpectedExpiration(K key) {
-    ExpiringEntry<K, V> entry = null;
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry == null)
       throw new NoSuchElementException();
@@ -932,14 +977,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @param key to reset expiration for
    */
   public void resetExpiration(K key) {
-    ExpiringEntry<K, V> entry = null;
-
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry != null)
       resetEntry(entry, false);
@@ -1001,16 +1039,25 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (!variableExpiration)
       throw new UnsupportedOperationException("Variable expiration is not enabled");
 
-    ExpiringEntry<K, V> entry = null;
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry != null)
       entry.expirationPolicy.set(expirationPolicy);
+  }
+
+  private ExpiringEntry<K, V> readEntry(Object key) {
+    readLock.lock();
+    try {
+      return entries.get(key);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  /* Visible for testing */
+  ExpirationPolicy getExpirationPolicy(K key) {
+    ExpiringEntry<K, V> entry = readEntry(key);
+    return entry == null ? null : entry.expirationPolicy.get();
   }
 
   /** {@inheritDoc} */
