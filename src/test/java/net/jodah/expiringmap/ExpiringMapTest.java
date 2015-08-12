@@ -625,7 +625,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     assertTrue(exp >= 45 && exp <= 55);
   }
 
-  @Test(expectedExceptions = IllegalArgumentException.class)
+  @Test(expectedExceptions = IllegalStateException.class)
   public void behaviorWhenBothTypesOfLoadersProvided() {
     ExpiringMap.builder()
         .entryLoader(new EntryLoader<Object, Object>() {
@@ -639,7 +639,6 @@ public class ExpiringMapTest extends ConcurrentTestCase {
           public ExpiringValue<Object> load(Object key) {
             return null;
           }
-        })
-        .build();
+        });
   }
 }

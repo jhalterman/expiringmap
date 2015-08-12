@@ -102,15 +102,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>(builder.expirationListeners);
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
     expirationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
-    if (builder.entryLoader != null && builder.expiringEntryLoader != null) {
-      throw new IllegalArgumentException("Either entryLoader or expiringEntryLoader may be set, not both");
-    } else if (builder.entryLoader != null) {
-      entryLoader = builder.entryLoader;
-      expiringEntryLoader = null;
-    } else {
-      entryLoader = null;
-      expiringEntryLoader = builder.expiringEntryLoader;
-    }
+    entryLoader = builder.entryLoader;
+    expiringEntryLoader = builder.expiringEntryLoader;
   }
 
   /**
@@ -156,26 +149,33 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     /**
-     * Sets the EntryLoader to use when loading entries.
+     * Sets the EntryLoader to use when loading entries. Either an EntryLoader or ExpiringEntryLoader may be set,
+     * not both.
      * 
      * @param loader to set
+     * @throws IllegalStateException if an {@link #expiringEntryLoader(ExpiringEntryLoader) ExpiringEntryLoader}
+     * is set
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> entryLoader(EntryLoader<? super K1, ? super V1> loader) {
       entryLoader = (EntryLoader<K, V>) loader;
+      validateAtMostOneLoader();
       return (Builder<K1, V1>) this;
     }
 
     /**
-     * Sets the ExpiringEntryLoader to use when loading entries.
+     * Sets the ExpiringEntryLoader to use when loading entries. Either an EntryLoader or ExpiringEntryLoader may
+     * be set, not both.
      *
      * @param loader to set
+     * @throws IllegalStateException if an {@link #entryLoader(EntryLoader) EntryLoader} is set
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> expiringEntryLoader(
         ExpiringEntryLoader<? super K1, ? super V1> loader) {
-      variableExpiration();
       expiringEntryLoader = (ExpiringEntryLoader<K, V>) loader;
+      validateAtMostOneLoader();
+      variableExpiration();
       return (Builder<K1, V1>) this;
     }
 
@@ -225,6 +225,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     public Builder<K, V> variableExpiration() {
       variableExpiration = true;
       return this;
+    }
+
+    private void validateAtMostOneLoader() {
+      if (entryLoader != null && expiringEntryLoader != null) {
+        throw new IllegalStateException("Either entryLoader or expiringEntryLoader may be set, not both");
+      }
     }
   }
 

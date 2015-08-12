@@ -21,7 +21,7 @@ public class ExpiringValue<V> {
     return new Builder<V>();
   }
 
-  private ExpiringValue(V value, ExpiringMap.ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
+  public ExpiringValue(V value, ExpiringMap.ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
     this.value = value;
     this.expirationPolicy = expirationPolicy;
     this.duration = duration;
