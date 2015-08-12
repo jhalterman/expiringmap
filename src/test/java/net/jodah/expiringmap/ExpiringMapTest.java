@@ -2,6 +2,7 @@ package net.jodah.expiringmap;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
@@ -584,11 +585,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
 
         @Override
         public ExpiringValue<String> load(String key) {
-          return ExpiringValue.<String>builder()
-              .value(key + ++count)
-              .duration(100 * count)
-              .timeUnit(TimeUnit.MILLISECONDS)
-              .build();
+          return new ExpiringValue<String>(key + ++count, 100 * count, TimeUnit.MILLISECONDS);
         }
       })
       .build();
@@ -604,6 +601,74 @@ public class ExpiringMapTest extends ConcurrentTestCase {
 
     map.get("baz");
     assertEquals(map.getExpiration("baz"), 400);
+  }
+
+  public void expiringValueShouldUseMapDefaultsWhenUnspecified() throws Exception {
+    long mapDefaultDuration = 100;
+    ExpirationPolicy mapDefaultPolicy = ExpirationPolicy.CREATED;
+
+    final ExpiringValue<String> useAllDefaults = new ExpiringValue<String>("useAllDefaults");
+    final ExpiringValue<String> useDefaultPolicy = new ExpiringValue<String>("useDefaultPolicy",
+      mapDefaultDuration * 2, TimeUnit.MILLISECONDS);
+    final ExpiringValue<String> useDefaultDuration = new ExpiringValue<String>("useDefaultDuration",
+      ExpirationPolicy.ACCESSED);
+    final ExpiringValue<String> useNoDefaults = new ExpiringValue<String>("useNoDefaults",
+                                                                          ExpirationPolicy.ACCESSED,
+                                                                          mapDefaultDuration * 3,
+                                                                          TimeUnit.MILLISECONDS);
+
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+        .expirationPolicy(mapDefaultPolicy)
+        .expiration(mapDefaultDuration, TimeUnit.MILLISECONDS)
+        .expiringEntryLoader(new ExpiringMap.ExpiringEntryLoader<String, String>() {
+          @Override
+          public ExpiringValue<String> load(String key) {
+            if (key.equals("useAllDefaults")) {
+              return useAllDefaults;
+            }
+            else if (key.equals("useDefaultPolicy")) {
+              return useDefaultPolicy;
+            }
+            else if (key.equals("useDefaultDuration")) {
+              return useDefaultDuration;
+            }
+            else if (key.equals("useNoDefaults")) {
+              return useNoDefaults;
+            }
+            else {
+              throw new IllegalStateException("Unexpected get");
+            }
+          }
+        })
+        .build();
+
+    map.get("useAllDefaults");
+    assertEquals(map.getExpiration("useAllDefaults"), mapDefaultDuration);
+    assertEquals(map.getExpirationPolicy("useAllDefaults"), mapDefaultPolicy);
+    map.get("useDefaultPolicy");
+    assertEquals(map.getExpiration("useDefaultPolicy"), useDefaultPolicy.getDuration());
+    assertEquals(map.getExpirationPolicy("useAllDefaults"), mapDefaultPolicy);
+    map.get("useDefaultDuration");
+    assertEquals(map.getExpiration("useDefaultDuration"), mapDefaultDuration);
+    assertNotEquals(useDefaultDuration.getExpirationPolicy(), mapDefaultDuration, "test validity check");
+    assertEquals(map.getExpirationPolicy("useDefaultDuration"), useDefaultDuration.getExpirationPolicy());
+    map.get("useNoDefaults");
+    assertEquals(map.getExpiration("useNoDefaults"), useNoDefaults.getDuration());
+    assertNotEquals(useNoDefaults.getExpirationPolicy(), mapDefaultDuration, "test validity check");
+    assertEquals(map.getExpirationPolicy("useNoDefaults"), useNoDefaults.getExpirationPolicy());
+  }
+
+  public void loadNullExpiringValue() throws Exception {
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+        .expiringEntryLoader(new ExpiringMap.ExpiringEntryLoader<String, String>() {
+          @Override
+          public ExpiringValue<String> load(String key) {
+            return null;
+          }
+        })
+        .build();
+
+    assertNull(map.get("foo"));
   }
 
   /**

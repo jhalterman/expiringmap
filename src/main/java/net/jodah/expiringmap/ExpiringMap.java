@@ -164,7 +164,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     /**
-     * Sets the ExpiringEntryLoader to use when loading entries. Either an EntryLoader or ExpiringEntryLoader may
+     * Sets the ExpiringEntryLoader to use when loading entries and configures
+     * {@link #variableExpiration() variable expiration}. Either an EntryLoader or ExpiringEntryLoader may
      * be set, not both.
      *
      * @param loader to set
@@ -673,14 +674,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   /** {@inheritDoc} */
   @Override
   public V get(Object key) {
-    ExpiringEntry<K, V> entry = null;
-
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry == null) {
       @SuppressWarnings("unchecked")
@@ -701,8 +695,23 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       return value;
     } else {
       ExpiringValue<? extends V> expiringValue = expiringEntryLoader.load(key);
+      putExpiringValue(key, expiringValue);
+      return expiringValue == null ? null : expiringValue.getValue();
+    }
+  }
+
+  private void putExpiringValue(K key, ExpiringValue<? extends V> expiringValue) {
+    if (expiringValue == null) {
+      put(key, null);
+    } else if (expiringValue.getExpirationPolicy() != null && expiringValue.getTimeUnit() != null) {
+      put(key, expiringValue.getValue(), expiringValue.getExpirationPolicy(), expiringValue.getDuration(),
+        expiringValue.getTimeUnit());
+    } else if (expiringValue.getExpirationPolicy() != null) {
+      put(key, expiringValue.getValue(), expiringValue.getExpirationPolicy());
+    } else if (expiringValue.getTimeUnit() != null) {
       put(key, expiringValue.getValue(), expiringValue.getDuration(), expiringValue.getTimeUnit());
-      return expiringValue.getValue();
+    } else {
+      put(key, expiringValue.getValue());
     }
   }
 
@@ -723,13 +732,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @throws NoSuchElementException If no entry exists for the given key
    */
   public long getExpiration(K key) {
-    ExpiringEntry<K, V> entry = null;
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry == null)
       throw new NoSuchElementException();
@@ -745,13 +748,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @throws NoSuchElementException If no entry exists for the given key
    */
   public long getExpectedExpiration(K key) {
-    ExpiringEntry<K, V> entry = null;
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry == null)
       throw new NoSuchElementException();
@@ -986,14 +983,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @param key to reset expiration for
    */
   public void resetExpiration(K key) {
-    ExpiringEntry<K, V> entry = null;
-
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry != null)
       resetEntry(entry, false);
@@ -1055,16 +1045,25 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (!variableExpiration)
       throw new UnsupportedOperationException("Variable expiration is not enabled");
 
-    ExpiringEntry<K, V> entry = null;
-    readLock.lock();
-    try {
-      entry = entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+    ExpiringEntry<K, V> entry = readEntry(key);
 
     if (entry != null)
       entry.expirationPolicy.set(expirationPolicy);
+  }
+
+  private ExpiringEntry<K, V> readEntry(Object key) {
+    readLock.lock();
+    try {
+      return entries.get(key);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  /* Visible for testing */
+  ExpirationPolicy getExpirationPolicy(K key) {
+    ExpiringEntry<K, V> entry = readEntry(key);
+    return entry == null ? null : entry.expirationPolicy.get();
   }
 
   /** {@inheritDoc} */

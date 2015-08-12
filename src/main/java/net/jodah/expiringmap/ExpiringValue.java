@@ -2,7 +2,12 @@ package net.jodah.expiringmap;
 
 import java.util.concurrent.TimeUnit;
 
-public class ExpiringValue<V> {
+/**
+ * A value which should be stored in an {@link ExpiringMap} with optional control over its expiration.
+ * @param <V> the type of value being stored
+ */
+public final class ExpiringValue<V> {
+  private static final long UNSET_DURATION = -1L;
 
   private final V value;
 
@@ -13,15 +18,64 @@ public class ExpiringValue<V> {
   private final TimeUnit timeUnit;
 
   /**
-   * Creates an ExpiringValue builder.
+   * Creates an ExpiringValue to be stored in an {@link ExpiringMap}. The map's default values for
+   * {@link ExpiringMap.ExpirationPolicy expiration policy} and
+   * {@link ExpiringMap#getExpiration()} expiration} will be used.
    *
-   * @return New ExpiringValue builder
+   * @param value the value to store
+   * @see ExpiringMap#put(Object, Object)
    */
-  public static <V> Builder<V> builder() {
-    return new Builder<V>();
+  public ExpiringValue(V value) {
+    this(value, UNSET_DURATION, null, null);
   }
 
+  /**
+   * Creates an ExpiringValue to be stored in an {@link ExpiringMap}. The map's default
+   * {@link ExpiringMap#getExpiration()} expiration} will be used.
+   *
+   * @param value the value to store
+   * @param expirationPolicy the expiration policy for the value
+   * @see ExpiringMap#put(Object, Object, ExpiringMap.ExpirationPolicy)
+   */
+  public ExpiringValue(V value, ExpiringMap.ExpirationPolicy expirationPolicy) {
+    this(value, UNSET_DURATION, null, expirationPolicy);
+  }
+
+  /**
+   * Creates an ExpiringValue to be stored in an {@link ExpiringMap}. The map's default
+   * {@link ExpiringMap.ExpirationPolicy expiration policy} will be used.
+   *
+   * @param value the value to store
+   * @param duration the length of time after an entry is created that it should be removed
+   * @param timeUnit the unit that {@code duration} is expressed in
+   * @see ExpiringMap#put(Object, Object, long, TimeUnit)
+   * @throws NullPointerException on null timeUnit
+   */
+  public ExpiringValue(V value, long duration, TimeUnit timeUnit) {
+    this(value, duration, timeUnit, null);
+    if (timeUnit == null) {
+      throw new NullPointerException();
+    }
+  }
+
+  /**
+   * Creates an ExpiringValue to be stored in an {@link ExpiringMap}.
+   *
+   * @param value the value to store
+   * @param duration the length of time after an entry is created that it should be removed
+   * @param timeUnit the unit that {@code duration} is expressed in
+   * @param expirationPolicy the expiration policy for the value
+   * @see ExpiringMap#put(Object, Object, ExpiringMap.ExpirationPolicy, long, TimeUnit)
+   * @throws NullPointerException on null timeUnit
+   */
   public ExpiringValue(V value, ExpiringMap.ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
+    this(value, duration, timeUnit, expirationPolicy);
+    if (timeUnit == null) {
+      throw new NullPointerException();
+    }
+  }
+
+  private ExpiringValue(V value, long duration, TimeUnit timeUnit, ExpiringMap.ExpirationPolicy expirationPolicy) {
     this.value = value;
     this.expirationPolicy = expirationPolicy;
     this.duration = duration;
@@ -74,40 +128,5 @@ public class ExpiringValue<V> {
         ", duration=" + duration +
         ", timeUnit=" + timeUnit +
         '}';
-  }
-
-  /**
-   * Builds ExpiringValue instances. Defaults to ExpirationPolicy.CREATED and expiration of 60
-   * TimeUnit.SECONDS.
-   */
-  public static class Builder<V> {
-    private V value;
-    private ExpiringMap.ExpirationPolicy expirationPolicy = ExpiringMap.ExpirationPolicy.CREATED;
-    private long duration = 60;
-    private TimeUnit timeUnit = TimeUnit.SECONDS;
-
-    public Builder<V> value(V value) {
-      this.value = value;
-      return this;
-    }
-
-    public Builder<V> expirationPolicy(ExpiringMap.ExpirationPolicy expirationPolicy) {
-      this.expirationPolicy = expirationPolicy;
-      return this;
-    }
-
-    public Builder<V> duration(long duration) {
-      this.duration = duration;
-      return this;
-    }
-
-    public Builder<V> timeUnit(TimeUnit timeUnit) {
-      this.timeUnit = timeUnit;
-      return this;
-    }
-
-    public ExpiringValue<V> build() {
-      return new ExpiringValue<V>(value, expirationPolicy, duration, timeUnit);
-    }
   }
 }
