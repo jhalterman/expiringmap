@@ -9,9 +9,9 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import net.jodah.expiringmap.ExpiringMap.ExpirationPolicy;
-import net.jodah.expiringmap.ExpiringMap.ExpiringEntry;
 import org.testng.annotations.Test;
+
+import net.jodah.expiringmap.ExpiringMap.ExpiringEntry;
 
 /**
  * Tests {@link ExpiringEntry}.

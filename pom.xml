@@ -53,20 +53,15 @@
         <configuration>
           <author>false</author>
           <protected>true</protected>
-          <excludePackageNames>*.internal</excludePackageNames>
+          <excludePackageNames>*.internal:*.internal.*</excludePackageNames>
+          <additionalparam>
+            -Xdoclint:none
+            -link http://docs.oracle.com/javase/8/docs/api/
+          </additionalparam>
         </configuration>
-        <executions>
-          <execution>
-            <id>attach-javadocs</id>
-            <goals>
-              <goal>jar</goal>
-            </goals>
-            <configuration>
-              <additionalparam>-Xdoclint:none</additionalparam>
-            </configuration>
-          </execution>
-        </executions>
       </plugin>
+
+      <!-- Coverage -->
       <plugin>
         <groupId>org.eluder.coveralls</groupId>
         <artifactId>coveralls-maven-plugin</artifactId>
@@ -118,6 +113,9 @@
               <excludePackageNames>*.internal:*.internal.*</excludePackageNames>
               <reportOutputDirectory>target/docs</reportOutputDirectory>
               <destDir>javadoc</destDir>
+              <links>
+                <link>http://download.oracle.com/javase/8/docs/api</link>
+              </links>
             </configuration>
           </plugin>
         </plugins>

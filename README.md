@@ -5,43 +5,49 @@
 
 A high performance, low-overhead, zero dependency, thread-safe [ConcurrentMap](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ConcurrentMap.html) implementation that expires entries. Features include:
 
-* Expiration policies
-* Variable entry expiration
-* Expiration listeners
-* Lazy entry loading
-* Support for Java 6+
+* [Expiration policies](#expiration-policies)
+* [Variable entry expiration](#variable-expiration)
+* [Expiration listeners](#expiration-listeners)
+* [Lazy entry loading](#lazy-entry-loading)
 
 ## Usage
 
-By default, ExpiringMap expires entries 60 seconds from creation:
-
-```java
-Map<String, Integer> map = ExpiringMap.create();
-
-// Expires after 60 seconds
-map.put("foo", 5);
-```
-    
-The expiration time can be varied as needed:
+ExpiringMap allows you to create a map that expires entries after a certain time period:
 
 ```java
 Map<String, Connection> map = ExpiringMap.builder()
   .expiration(30, TimeUnit.SECONDS)
   .build();
+  
+// Expires after 30 seconds
+map.put("foo", 5);
 ```
 
-Expiration can also occur based on an entry's last access time:
+#### Expiration Policies
+
+Expiration can occur based on an entry's creation time or last access time:
 
 ```java
 Map<String, Connection> map = ExpiringMap.builder()
   .expirationPolicy(ExpirationPolicy.ACCESSED)
-  .expiration(5, TimeUnit.MINUTES)
   .build(); 
+```
+
+We can also specify an expiration policy for individual entries:
+
+```java
+map.put("foo", "bar", ExpirationPolicy.CREATED);
+```
+
+And we can change policies on the fly:
+
+```java
+map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
 ```
 
 #### Variable Expiration
         
-Entries can have individually variable expiration durations and policies:
+Entries can have individually variable expiration times and policies:
 
 ```java
 ExpiringMap<String, String> map = ExpiringMap.builder()
@@ -51,12 +57,23 @@ ExpiringMap<String, String> map = ExpiringMap.builder()
 map.put("foo", "bar", ExpirationPolicy.ACCESSED, 5, TimeUnit.SECONDS);
 ```
 
-Expiration durations and policies can also be set and reset on the fly:
+Expiration times can also be changed on the fly:
 
 ```java
 map.setExpiration("foo", 5, TimeUnit.SECONDS);
-map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
-map.resetExpiration("foo");
+```
+
+#### Expiration Listeners
+
+Expiration listeners can be notified when an entry expires:
+
+```java
+Map<String, Connection> map = ExpiringMap.builder()
+  .expirationListener(new ExpirationListener<String, Connection>() { 
+    public void expired(String key, Connection connection) { 
+      connection.close(); 
+    })
+  .build();
 ```
 
 #### Lazy Entry Loading
@@ -89,17 +106,18 @@ Map<String, Connection> connections = ExpiringMap.builder()
   .build();
 ```
 
-#### Expiration Listeners
+#### Expiration Introspection
 
-Finally, expiration listeners can be notified when an entry expires:
+ExpiringMap allows you to learn when an entry is expected to expire:
 
 ```java
-Map<String, Connection> map = ExpiringMap.builder()
-  .expirationListener(new ExpirationListener<String, Connection>() { 
-    public void expired(String key, Connection connection) { 
-      connection.close(); 
-    })
-  .build();
+long expiration = map.getExpectedExpiration("foo");
+```
+
+We can also reset the internal expiration timer for an entry:
+
+```java
+map.resetExpiration("foo");
 ```
 
 ## Additional Notes

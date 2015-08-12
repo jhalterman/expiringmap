@@ -1,4 +1,4 @@
-package net.jodah.expiringmap;
+package net.jodah.expiringmap.internal;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Named thread factory.
  */
-class NamedThreadFactory implements ThreadFactory {
+public class NamedThreadFactory implements ThreadFactory {
   private final AtomicInteger threadNumber = new AtomicInteger(1);
   private final String nameFormat;
 

@@ -28,6 +28,9 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import net.jodah.expiringmap.internal.Assert;
+import net.jodah.expiringmap.internal.NamedThreadFactory;
+
 /**
  * A thread-safe map that expires entries. Optional features include expiration policies, variable entry expiration,
  * lazy entry loading, and expiration listeners.
@@ -140,10 +143,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * 
      * @param duration the length of time after an entry is created that it should be removed
      * @param timeUnit the unit that {@code duration} is expressed in
+     * @throws NullPointerException if {@code timeUnit} is null
      */
     public Builder<K, V> expiration(long duration, TimeUnit timeUnit) {
       this.duration = duration;
-      this.timeUnit = timeUnit;
+      this.timeUnit = Assert.notNull(timeUnit, "timeUnit");
       return this;
     }
 
@@ -152,12 +156,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * both.
      * 
      * @param loader to set
+     * @throws NullPointerException if {@code loader} is null
      * @throws IllegalStateException if an {@link #expiringEntryLoader(ExpiringEntryLoader) ExpiringEntryLoader} is set
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> entryLoader(EntryLoader<? super K1, ? super V1> loader) {
-      entryLoader = (EntryLoader<K, V>) loader;
-      validateAtMostOneLoader();
+      assertNoLoaderSet();
+      entryLoader = (EntryLoader<K, V>) Assert.notNull(loader, "loader");
       return (Builder<K1, V1>) this;
     }
 
@@ -166,13 +171,14 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * expiration}. Either an EntryLoader or ExpiringEntryLoader may be set, not both.
      *
      * @param loader to set
+     * @throws NullPointerException if {@code loader} is null
      * @throws IllegalStateException if an {@link #entryLoader(EntryLoader) EntryLoader} is set
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> expiringEntryLoader(
         ExpiringEntryLoader<? super K1, ? super V1> loader) {
-      expiringEntryLoader = (ExpiringEntryLoader<K, V>) loader;
-      validateAtMostOneLoader();
+      assertNoLoaderSet();
+      expiringEntryLoader = (ExpiringEntryLoader<K, V>) Assert.notNull(loader, "loader");
       variableExpiration();
       return (Builder<K1, V1>) this;
     }
@@ -181,10 +187,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * Sets the expiration listener which will receive notifications upon each map entry's expiration.
      * 
      * @param listener to set
+     * @throws NullPointerException if {@code listener} is null
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> expirationListener(
         ExpirationListener<? super K1, ? super V1> listener) {
+      Assert.notNull(listener, "listener");
       if (expirationListeners == null)
         expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>();
       expirationListeners.add(new ExpirationListenerConfig<K, V>((ExpirationListener<K, V>) listener));
@@ -195,10 +203,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * Sets expiration listeners which will receive notifications upon each map entry's expiration.
      * 
      * @param listeners to set
+     * @throws NullPointerException if {@code listener} is null
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> expirationListeners(
         List<ExpirationListener<? super K1, ? super V1>> listeners) {
+      Assert.notNull(listeners, "listeners");
       if (expirationListeners == null)
         expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>(listeners.size());
       for (ExpirationListener<? super K1, ? super V1> listener : listeners)
@@ -210,9 +220,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * Sets the map entry expiration policy.
      * 
      * @param expirationPolicy
+     * @throws NullPointerException if {@code expirationPolicy} is null
      */
     public Builder<K, V> expirationPolicy(ExpirationPolicy expirationPolicy) {
-      this.expirationPolicy = expirationPolicy;
+      this.expirationPolicy = Assert.notNull(expirationPolicy, "expirationPolicy");
       return this;
     }
 
@@ -224,10 +235,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       return this;
     }
 
-    private void validateAtMostOneLoader() {
-      if (entryLoader != null && expiringEntryLoader != null) {
-        throw new IllegalStateException("Either entryLoader or expiringEntryLoader may be set, not both");
-      }
+    private void assertNoLoaderSet() {
+      Assert.state(entryLoader == null && expiringEntryLoader == null,
+          "Either entryLoader or expiringEntryLoader may be set, not both");
     }
   }
 
@@ -390,7 +400,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Provides an expiration listener configuration. */
-  private static class ExpirationListenerConfig<K, V> {
+  static class ExpirationListenerConfig<K, V> {
     final ExpirationListener<K, V> expirationListener;
     /** -1 = initial, 0 = synchronous, 1 = asynchronous */
     int executionPolicy = -1;
@@ -402,7 +412,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Expiring map entry implementation. */
-  private static class ExpiringEntry<K, V> implements Comparable<ExpiringEntry<K, V>> {
+  static class ExpiringEntry<K, V> implements Comparable<ExpiringEntry<K, V>> {
     final AtomicLong expirationNanos;
     /** Epoch time at which the entry is expected to expire */
     final AtomicLong expectedExpiration;
@@ -505,7 +515,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Creates a new instance of ExpiringMap with ExpirationPolicy.CREATED and expiration duration of 60 TimeUnit.SECONDS.
+   * Creates a new instance of ExpiringMap with ExpirationPolicy.CREATED and an expiration of 60 seconds.
    */
   @SuppressWarnings("unchecked")
   public static <K, V> ExpiringMap<K, V> create() {
@@ -516,17 +526,15 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * Adds an expiration listener.
    * 
    * @param listener to add
-   * @throws NullPointerException if listener is null
+   * @throws NullPointerException if {@code listener} is null
    */
   public void addExpirationListener(ExpirationListener<K, V> listener) {
-    if (listener == null)
-      throw new NullPointerException();
+    Assert.notNull(listener, "listener");
     if (expirationListeners == null)
       expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>();
     expirationListeners.add(new ExpirationListenerConfig<K, V>(listener));
   }
 
-  /** {@inheritDoc} */
   @Override
   public void clear() {
     writeLock.lock();
@@ -539,7 +547,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean containsKey(Object key) {
     readLock.lock();
@@ -550,7 +557,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean containsValue(Object value) {
     readLock.lock();
@@ -561,7 +567,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public Set<Map.Entry<K, V>> entrySet() {
     return new AbstractSet<Map.Entry<K, V>>() {
@@ -610,7 +615,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public V get(Object key) {
     ExpiringEntry<K, V> entry = readEntry(key);
@@ -662,14 +666,14 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param key
    * @return The expiration duration in milliseconds
+   * @throws NullPointerException if {@code key} is null
    * @throws NoSuchElementException If no entry exists for the given key
    */
   public long getExpiration(K key) {
+    Assert.notNull(key, "key");
     ExpiringEntry<K, V> entry = readEntry(key);
-
     if (entry == null)
       throw new NoSuchElementException();
-
     return TimeUnit.NANOSECONDS.toMillis(entry.expirationNanos.get());
   }
 
@@ -678,14 +682,14 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param key
    * @return The expiration duration in milliseconds
+   * @throws NullPointerException if {@code key} is null
    * @throws NoSuchElementException If no entry exists for the given key
    */
   public long getExpectedExpiration(K key) {
+    Assert.notNull(key, "key");
     ExpiringEntry<K, V> entry = readEntry(key);
-
     if (entry == null)
       throw new NoSuchElementException();
-
     return TimeUnit.NANOSECONDS.toMillis(entry.expectedExpiration.get() - System.nanoTime());
   }
 
@@ -699,7 +703,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean isEmpty() {
     readLock.lock();
@@ -710,7 +713,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public Set<K> keySet() {
     return new AbstractSet<K>() {
@@ -749,13 +751,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @param key to put value for
    * @param value to put for key
    * @return the old value
-   * @throws NullPointerException on null key
+   * @throws NullPointerException if {@code key} is null
    */
   @Override
   public V put(K key, V value) {
-    if (key == null)
-      throw new NullPointerException();
-
+    Assert.notNull(key, "key");
     return putInternal(key, value, expirationPolicy.get(), expirationNanos.get());
   }
 
@@ -764,6 +764,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    */
   public V put(K key, V value, ExpirationPolicy expirationPolicy) {
     return put(key, value, expirationPolicy, expirationNanos.get(), TimeUnit.NANOSECONDS);
+  }
+
+  /**
+   * @see #put(Object, Object, ExpirationPolicy, long, TimeUnit)
+   */
+  public V put(K key, V value, long duration, TimeUnit timeUnit) {
+    return put(key, value, expirationPolicy.get(), duration, timeUnit);
   }
 
   /**
@@ -776,34 +783,21 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @param timeUnit the unit that {@code duration} is expressed in
    * @return the old value
    * @throws UnsupportedOperationException If variable expiration is not enabled
-   * @throws NullPointerException on null key or timeUnit
+   * @throws NullPointerException if {@code key}, {@code expirationPolicy} or {@code timeUnit} are null
    */
   public V put(K key, V value, ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
-    if (!variableExpiration)
-      throw new UnsupportedOperationException("Variable expiration is not enabled");
-
-    if (key == null || timeUnit == null)
-      throw new NullPointerException();
-
+    Assert.notNull(key, "key");
+    Assert.notNull(expirationPolicy, "expirationPolicy");
+    Assert.notNull(timeUnit, "timeUnit");
+    Assert.operation(variableExpiration, "Variable expiration is not enabled");
     return putInternal(key, value, expirationPolicy, TimeUnit.NANOSECONDS.convert(duration, timeUnit));
   }
 
-  /**
-   * @see #put(Object, Object, ExpirationPolicy, long, TimeUnit)
-   */
-  public V put(K key, V value, long duration, TimeUnit timeUnit) {
-    return put(key, value, expirationPolicy.get(), duration, timeUnit);
-  }
-
-  /** {@inheritDoc} */
   @Override
   public void putAll(Map<? extends K, ? extends V> map) {
-    if (map == null)
-      throw new NullPointerException();
-
+    Assert.notNull(map, "map");
     long expiration = expirationNanos.get();
     ExpirationPolicy expirationPolicy = this.expirationPolicy.get();
-
     writeLock.lock();
     try {
       for (Map.Entry<? extends K, ? extends V> entry : map.entrySet())
@@ -813,9 +807,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public V putIfAbsent(K key, V value) {
+    Assert.notNull(key, "key");
     writeLock.lock();
     try {
       if (!entries.containsKey(key))
@@ -827,11 +821,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public V remove(Object key) {
+    Assert.notNull(key, "key");
     ExpiringEntry<K, V> entry = null;
-
     writeLock.lock();
     try {
       entry = entries.remove(key);
@@ -847,9 +840,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     return entry.getValue();
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean remove(Object key, Object value) {
+    Assert.notNull(key, "key");
     writeLock.lock();
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
@@ -865,9 +858,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public V replace(K key, V value) {
+    Assert.notNull(key, "key");
     writeLock.lock();
     try {
       if (entries.containsKey(key)) {
@@ -879,9 +872,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public boolean replace(K key, V oldValue, V newValue) {
+    Assert.notNull(key, "key");
     writeLock.lock();
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
@@ -899,8 +892,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * Removes an expiration listener.
    * 
    * @param listener
+   * @throws NullPointerException if {@code listener} is null
    */
   public void removeExpirationListener(ExpirationListener<K, V> listener) {
+    Assert.notNull(listener, "listener");
     for (int i = 0; i < expirationListeners.size(); i++) {
       if (expirationListeners.get(i).expirationListener.equals(listener)) {
         expirationListeners.remove(i);
@@ -913,10 +908,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * Resets expiration for the entry corresponding to {@code key}.
    * 
    * @param key to reset expiration for
+   * @throws NullPointerException if {@code key} is null
    */
   public void resetExpiration(K key) {
+    Assert.notNull(key, "key");
     ExpiringEntry<K, V> entry = readEntry(key);
-
     if (entry != null)
       resetEntry(entry, false);
   }
@@ -928,12 +924,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @param key Key to set expiration for
    * @param duration the length of time after an entry is created that it should be removed
    * @param timeUnit the unit that {@code duration} is expressed in
+   * @throws NullPointerException if {@code key} or {@code timeUnit} are null
    * @throws UnsupportedOperationException If variable expiration is not enabled
    */
   public void setExpiration(K key, long duration, TimeUnit timeUnit) {
-    if (!variableExpiration)
-      throw new UnsupportedOperationException("Variable expiration is not enabled");
-
+    Assert.notNull(key, "key");
+    Assert.notNull(timeUnit, "timeUnit");
+    Assert.operation(variableExpiration, "Variable expiration is not enabled");
     writeLock.lock();
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
@@ -949,11 +946,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param duration the length of time after an entry is created that it should be removed
    * @param timeUnit the unit that {@code duration} is expressed in
+   * @throws NullPointerException {@code timeUnit} is null
+   * @throws UnsupportedOperationException If variable expiration is not enabled
    */
   public void setExpiration(long duration, TimeUnit timeUnit) {
-    if (!variableExpiration)
-      throw new UnsupportedOperationException("Variable expiration is not enabled");
-
+    Assert.notNull(timeUnit, "timeUnit");
+    Assert.operation(variableExpiration, "Variable expiration is not enabled");
     expirationNanos.set(TimeUnit.NANOSECONDS.convert(duration, timeUnit));
   }
 
@@ -961,8 +959,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * Sets the global expiration policy for the map.
    * 
    * @param expirationPolicy
+   * @throws NullPointerException {@code expirationPolicy} is null
    */
   public void setExpirationPolicy(ExpirationPolicy expirationPolicy) {
+    Assert.notNull(expirationPolicy, "expirationPolicy");
     this.expirationPolicy.set(expirationPolicy);
   }
 
@@ -971,14 +971,14 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param key to set policy for
    * @param expirationPolicy to set
+   * @throws NullPointerException if {@code key} or {@code expirationPolicy} are null
    * @throws UnsupportedOperationException If variable expiration is not enabled
    */
   public void setExpirationPolicy(K key, ExpirationPolicy expirationPolicy) {
-    if (!variableExpiration)
-      throw new UnsupportedOperationException("Variable expiration is not enabled");
-
+    Assert.notNull(key, "key");
+    Assert.notNull(expirationPolicy, "expirationPolicy");
+    Assert.operation(variableExpiration, "Variable expiration is not enabled");
     ExpiringEntry<K, V> entry = readEntry(key);
-
     if (entry != null)
       entry.expirationPolicy.set(expirationPolicy);
   }
@@ -998,7 +998,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     return entry == null ? null : entry.expirationPolicy.get();
   }
 
-  /** {@inheritDoc} */
   @Override
   public int size() {
     readLock.lock();
@@ -1019,7 +1018,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public Collection<V> values() {
     return new AbstractCollection<V>() {
