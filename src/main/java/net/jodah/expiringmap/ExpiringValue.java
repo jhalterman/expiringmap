@@ -8,13 +8,9 @@ import java.util.concurrent.TimeUnit;
  */
 public final class ExpiringValue<V> {
   private static final long UNSET_DURATION = -1L;
-
   private final V value;
-
-  private final ExpiringMap.ExpirationPolicy expirationPolicy;
-
+  private final ExpirationPolicy expirationPolicy;
   private final long duration;
-
   private final TimeUnit timeUnit;
 
   /**
@@ -37,7 +33,7 @@ public final class ExpiringValue<V> {
    * @param expirationPolicy the expiration policy for the value
    * @see ExpiringMap#put(Object, Object, ExpiringMap.ExpirationPolicy)
    */
-  public ExpiringValue(V value, ExpiringMap.ExpirationPolicy expirationPolicy) {
+  public ExpiringValue(V value, ExpirationPolicy expirationPolicy) {
     this(value, UNSET_DURATION, null, expirationPolicy);
   }
 
@@ -68,14 +64,14 @@ public final class ExpiringValue<V> {
    * @see ExpiringMap#put(Object, Object, ExpiringMap.ExpirationPolicy, long, TimeUnit)
    * @throws NullPointerException on null timeUnit
    */
-  public ExpiringValue(V value, ExpiringMap.ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
+  public ExpiringValue(V value, ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
     this(value, duration, timeUnit, expirationPolicy);
     if (timeUnit == null) {
       throw new NullPointerException();
     }
   }
 
-  private ExpiringValue(V value, long duration, TimeUnit timeUnit, ExpiringMap.ExpirationPolicy expirationPolicy) {
+  private ExpiringValue(V value, long duration, TimeUnit timeUnit, ExpirationPolicy expirationPolicy) {
     this.value = value;
     this.expirationPolicy = expirationPolicy;
     this.duration = duration;
@@ -86,7 +82,7 @@ public final class ExpiringValue<V> {
     return value;
   }
 
-  public ExpiringMap.ExpirationPolicy getExpirationPolicy() {
+  public ExpirationPolicy getExpirationPolicy() {
     return expirationPolicy;
   }
 

@@ -29,19 +29,19 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * A thread-safe map that expires entries. Optional features include expiration policies, variable
- * entry settings, and expiration listeners.
+ * A thread-safe map that expires entries. Optional features include expiration policies, variable entry expiration,
+ * lazy entry loading, and expiration listeners.
  * 
  * <p>
- * Entries are tracked by expiration time and expired by a single static {@link Timer}.
+ * Entries are tracked by expiration time and expired by a single {@link Timer} thread.
  * 
  * <p>
- * Expiration listeners will automatically be assigned to run in the context of the Timer thread or
- * in a separate thread based on their first timed duration.
+ * Expiration listeners will automatically be assigned to run in the context of the Timer thread or in a separate thread
+ * based on their first timed duration.
  * 
  * <p>
- * When variable expiration is disabled (default), put/remove operations are constant O(n). When
- * variable expiration is enabled, put/remove operations impose an <i>O(log n)</i> cost.
+ * When variable expiration is disabled (default), put/remove operations are constant O(n). When variable expiration is
+ * enabled, put/remove operations impose an <i>O(log n)</i> cost.
  * 
  * <p>
  * Example usages:
@@ -71,10 +71,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @param <V> Value type
  */
 public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
-  static final ScheduledExecutorService expirer = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(
-    "ExpiringMap-Expirer"));
-  static final ThreadPoolExecutor listenerService = (ThreadPoolExecutor) Executors.newCachedThreadPool(new NamedThreadFactory(
-    "ExpiringMap-Listener-%s"));
+  static final ScheduledExecutorService expirer = Executors
+      .newSingleThreadScheduledExecutor(new NamedThreadFactory("ExpiringMap-Expirer"));
+  static final ThreadPoolExecutor listenerService = (ThreadPoolExecutor) Executors
+      .newCachedThreadPool(new NamedThreadFactory("ExpiringMap-Listener-%s"));
   /** Nanoseconds to wait for listener execution */
   private static final long LISTENER_EXECUTION_THRESHOLD = TimeUnit.MILLISECONDS.toNanos(100);
 
@@ -107,8 +107,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Builds ExpiringMap instances. Defaults to ExpirationPolicy.CREATED and expiration of 60
-   * TimeUnit.SECONDS.
+   * Builds ExpiringMap instances. Defaults to ExpirationPolicy.CREATED and expiration of 60 TimeUnit.SECONDS.
    */
   public static final class Builder<K, V> {
     private ExpirationPolicy expirationPolicy = ExpirationPolicy.CREATED;
@@ -149,12 +148,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     /**
-     * Sets the EntryLoader to use when loading entries. Either an EntryLoader or ExpiringEntryLoader may be set,
-     * not both.
+     * Sets the EntryLoader to use when loading entries. Either an EntryLoader or ExpiringEntryLoader may be set, not
+     * both.
      * 
      * @param loader to set
-     * @throws IllegalStateException if an {@link #expiringEntryLoader(ExpiringEntryLoader) ExpiringEntryLoader}
-     * is set
+     * @throws IllegalStateException if an {@link #expiringEntryLoader(ExpiringEntryLoader) ExpiringEntryLoader} is set
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> entryLoader(EntryLoader<? super K1, ? super V1> loader) {
@@ -164,9 +162,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     /**
-     * Sets the ExpiringEntryLoader to use when loading entries and configures
-     * {@link #variableExpiration() variable expiration}. Either an EntryLoader or ExpiringEntryLoader may
-     * be set, not both.
+     * Sets the ExpiringEntryLoader to use when loading entries and configures {@link #variableExpiration() variable
+     * expiration}. Either an EntryLoader or ExpiringEntryLoader may be set, not both.
      *
      * @param loader to set
      * @throws IllegalStateException if an {@link #entryLoader(EntryLoader) EntryLoader} is set
@@ -181,14 +178,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     /**
-     * Sets the expiration listener which will receive notifications upon each map entry's
-     * expiration.
+     * Sets the expiration listener which will receive notifications upon each map entry's expiration.
      * 
      * @param listener to set
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> expirationListener(
-      ExpirationListener<? super K1, ? super V1> listener) {
+        ExpirationListener<? super K1, ? super V1> listener) {
       if (expirationListeners == null)
         expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>();
       expirationListeners.add(new ExpirationListenerConfig<K, V>((ExpirationListener<K, V>) listener));
@@ -202,7 +198,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      */
     @SuppressWarnings("unchecked")
     public <K1 extends K, V1 extends V> Builder<K1, V1> expirationListeners(
-      List<ExpirationListener<? super K1, ? super V1>> listeners) {
+        List<ExpirationListener<? super K1, ? super V1>> listeners) {
       if (expirationListeners == null)
         expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>(listeners.size());
       for (ExpirationListener<? super K1, ? super V1> listener : listeners)
@@ -235,64 +231,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /**
-   * A listener for expired object events.
-   * 
-   * @param <K> Key type
-   * @param <V> Value type
-   */
-  public interface ExpirationListener<K, V> {
-    /**
-     * Called when a map entry expires.
-     * 
-     * @param key Expired key
-     * @param value Expired value
-     */
-    void expired(K key, V value);
-  }
-
-  /**
-   * Loads entries on demand.
-   * 
-   * @param <K> Key type
-   * @param <V> Value type
-   */
-  public interface EntryLoader<K, V> {
-    /**
-     * Called to load a new value for the {@code key} into an expiring map.
-     * 
-     * @param key to load a value for
-     * @return new value to load
-     */
-    V load(K key);
-  }
-
-  /**
-   * Loads entries on demand, with control over each value's expiry duration (i.e. variable expiration).
-   *
-   * @param <K> Key type
-   * @param <V> Value type
-   */
-  public interface ExpiringEntryLoader<K, V> {
-    /**
-     * Called to load a new value for the {@code key} into an expiring map.
-     *
-     * @param key to load a value for
-     * @return contains new value to load along with its expiry duration
-     */
-    ExpiringValue<V> load(K key);
-  }
-
-  /** Map entry expiration policy. */
-  public enum ExpirationPolicy {
-    /** Expires entries based on when they were last accessed */
-    ACCESSED,
-    /** Expires entries based on when they were created */
-    CREATED;
-  }
-
   /** Entry map definition. */
-  interface EntryMap<K, V> extends Map<K, ExpiringEntry<K, V>> {
+  private interface EntryMap<K, V> extends Map<K, ExpiringEntry<K, V>> {
     /** Returns the first entry in the map or null if the map is empty. */
     ExpiringEntry<K, V> first();
 
@@ -308,7 +248,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Entry LinkedHashMap implementation. */
-  static class EntryLinkedHashMap<K, V> extends LinkedHashMap<K, ExpiringEntry<K, V>> implements EntryMap<K, V> {
+  private static class EntryLinkedHashMap<K, V> extends LinkedHashMap<K, ExpiringEntry<K, V>>implements EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
 
     @Override
@@ -365,7 +305,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Entry TreeHashMap implementation. */
-  static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>> implements EntryMap<K, V> {
+  private static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>>implements EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
     SortedSet<ExpiringEntry<K, V>> sortedSet = new TreeSet<ExpiringEntry<K, V>>();
 
@@ -450,7 +390,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Provides an expiration listener configuration. */
-  static class ExpirationListenerConfig<K, V> {
+  private static class ExpirationListenerConfig<K, V> {
     final ExpirationListener<K, V> expirationListener;
     /** -1 = initial, 0 = synchronous, 1 = asynchronous */
     int executionPolicy = -1;
@@ -462,7 +402,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Expiring map entry implementation. */
-  static class ExpiringEntry<K, V> implements Comparable<ExpiringEntry<K, V>> {
+  private static class ExpiringEntry<K, V> implements Comparable<ExpiringEntry<K, V>> {
     final AtomicLong expirationNanos;
     /** Epoch time at which the entry is expected to expire */
     final AtomicLong expectedExpiration;
@@ -565,8 +505,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Creates a new instance of ExpiringMap with ExpirationPolicy.CREATED and expiration duration of
-   * 60 TimeUnit.SECONDS.
+   * Creates a new instance of ExpiringMap with ExpirationPolicy.CREATED and expiration duration of 60 TimeUnit.SECONDS.
    */
   @SuppressWarnings("unchecked")
   public static <K, V> ExpiringMap<K, V> create() {
@@ -642,7 +581,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       @Override
       public Iterator<Map.Entry<K, V>> iterator() {
         return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new EntryIterator()
-          : ((EntryTreeHashMap<K, V>) entries).new EntryIterator();
+            : ((EntryTreeHashMap<K, V>) entries).new EntryIterator();
       }
 
       @Override
@@ -703,7 +642,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         TimeUnit timeUnit = expiringValue.getTimeUnit() == null ? TimeUnit.NANOSECONDS : expiringValue.getTimeUnit();
         put(key, expiringValue.getValue(),
             expiringValue.getExpirationPolicy() == null ? expirationPolicy.get() : expiringValue.getExpirationPolicy(),
-          duration, timeUnit);
+            duration, timeUnit);
         return expiringValue.getValue();
       }
     }
@@ -788,7 +727,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       @Override
       public Iterator<K> iterator() {
         return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new KeyIterator()
-          : ((EntryTreeHashMap<K, V>) entries).new KeyIterator();
+            : ((EntryTreeHashMap<K, V>) entries).new KeyIterator();
       }
 
       @Override
@@ -804,8 +743,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Puts {@code value} in the map for {@code key}. Resets the entry's expiration unless an entry
-   * already exists for the same {@code key} and {@code value}.
+   * Puts {@code value} in the map for {@code key}. Resets the entry's expiration unless an entry already exists for the
+   * same {@code key} and {@code value}.
    * 
    * @param key to put value for
    * @param value to put for key
@@ -828,9 +767,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Puts {@code value} in the map for {@code key}. Resets the entry's expiration unless an entry
-   * already exists for the same {@code key} and {@code value}. Requires that variable expiration be
-   * enabled.
+   * Puts {@code value} in the map for {@code key}. Resets the entry's expiration unless an entry already exists for the
+   * same {@code key} and {@code value}. Requires that variable expiration be enabled.
    * 
    * @param key Key to put value for
    * @param value Value to put for key
@@ -984,8 +922,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Sets the expiration duration for the entry corresponding to the given key. Supported only if
-   * variable expiration is enabled.
+   * Sets the expiration duration for the entry corresponding to the given key. Supported only if variable expiration is
+   * enabled.
    * 
    * @param key Key to set expiration for
    * @param duration the length of time after an entry is created that it should be removed
@@ -1098,7 +1036,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       @Override
       public Iterator<V> iterator() {
         return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new ValueIterator()
-          : ((EntryTreeHashMap<K, V>) entries).new ValueIterator();
+            : ((EntryTreeHashMap<K, V>) entries).new ValueIterator();
       }
 
       @Override
@@ -1109,11 +1047,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Notifies expiration listeners that the given entry expired. Utilizes an expiration policy to
-   * invoke the listener. If the listener's initial execution exceeds LISTENER_EXECUTION_THRESHOLD
-   * then the listener will be invoked within the context of {@code listenerService}, else it will
-   * be invoked within the context of {@code timer}. Must not be called from within a locked
-   * context.
+   * Notifies expiration listeners that the given entry expired. Utilizes an expiration policy to invoke the listener.
+   * If the listener's initial execution exceeds LISTENER_EXECUTION_THRESHOLD then the listener will be invoked within
+   * the context of {@code listenerService}, else it will be invoked within the context of {@code timer}. Must not be
+   * called from within a locked context.
    * 
    * @param entry Entry to expire
    */
@@ -1148,9 +1085,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Puts the given key/value in storage, scheduling the new entry for expiration if needed. If a
-   * previous value existed for the given key, it is first cancelled and the entries reordered to
-   * reflect the new expiration.
+   * Puts the given key/value in storage, scheduling the new entry for expiration if needed. If a previous value existed
+   * for the given key, it is first cancelled and the entries reordered to reflect the new expiration.
    */
   V putInternal(K key, V value, ExpirationPolicy expirationPolicy, long expirationNanos) {
     writeLock.lock();
@@ -1159,16 +1095,16 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       V oldValue = null;
 
       if (entry == null) {
-        entry = new ExpiringEntry<K, V>(key, value, variableExpiration ? new AtomicReference<ExpirationPolicy>(
-          expirationPolicy) : this.expirationPolicy, variableExpiration ? new AtomicLong(expirationNanos)
-          : this.expirationNanos);
+        entry = new ExpiringEntry<K, V>(key, value,
+            variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy) : this.expirationPolicy,
+            variableExpiration ? new AtomicLong(expirationNanos) : this.expirationNanos);
         entries.put(key, entry);
         if (entries.size() == 1 || entries.first().equals(entry))
           scheduleEntry(entry);
       } else {
         oldValue = entry.getValue();
         if (!ExpirationPolicy.ACCESSED.equals(expirationPolicy)
-          && ((oldValue == null && value == null) || (oldValue != null && oldValue.equals(value))))
+            && ((oldValue == null && value == null) || (oldValue != null && oldValue.equals(value))))
           return value;
 
         entry.setValue(value);
@@ -1182,9 +1118,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Resets the given entry's schedule canceling any existing scheduled expiration and reordering
-   * the entry in the internal map. Schedules the next entry in the map if the given {@code entry}
-   * was scheduled or if {@code scheduleNext} is true.
+   * Resets the given entry's schedule canceling any existing scheduled expiration and reordering the entry in the
+   * internal map. Schedules the next entry in the map if the given {@code entry} was scheduled or if
+   * {@code scheduleNext} is true.
    * 
    * @param entry to reset
    * @param scheduleFirstEntry whether the first entry should be automatically scheduled
@@ -1203,8 +1139,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Schedules an entry for expiration. Guards against concurrent schedule/schedule, cancel/schedule
-   * and schedule/cancel calls.
+   * Schedules an entry for expiration. Guards against concurrent schedule/schedule, cancel/schedule and schedule/cancel
+   * calls.
    * 
    * @param entry Entry to schedule
    */
@@ -1254,7 +1190,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       };
 
       Future<?> entryFuture = expirer.schedule(runnable, entry.expectedExpiration.get() - System.nanoTime(),
-        TimeUnit.NANOSECONDS);
+          TimeUnit.NANOSECONDS);
       entry.schedule(entryFuture);
     }
   }
