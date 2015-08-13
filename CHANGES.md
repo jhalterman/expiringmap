@@ -1,3 +1,18 @@
+# 0.5.0
+
+### New Features
+
+* Added support for variable expiration lazily loaded entries.
+
+### Bug Fixes
+
+* Fixed #15 - Catch synchronous expirationlistener invocation exceptions.
+
+### API Changes
+
+* Added `ExpiringMap.Builder.expiringEntryLoader`.
+* `ExpirationPolicy`, `ExpirationListener`, and `EntryLoader` are no longer inner types on `ExpiringMap` and are now top level types on the `net.jodah.expiringmap` package.
+
 # 0.4.3
 
 ### Bug Fixes
