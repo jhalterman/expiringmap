@@ -4,6 +4,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * A value which should be stored in an {@link ExpiringMap} with optional control over its expiration.
+ * 
  * @param <V> the type of value being stored
  */
 public final class ExpiringValue<V> {
@@ -15,8 +16,7 @@ public final class ExpiringValue<V> {
 
   /**
    * Creates an ExpiringValue to be stored in an {@link ExpiringMap}. The map's default values for
-   * {@link ExpiringMap.ExpirationPolicy expiration policy} and
-   * {@link ExpiringMap#getExpiration()} expiration} will be used.
+   * {@link ExpirationPolicy expiration policy} and {@link ExpiringMap#getExpiration()} expiration} will be used.
    *
    * @param value the value to store
    * @see ExpiringMap#put(Object, Object)
@@ -31,15 +31,15 @@ public final class ExpiringValue<V> {
    *
    * @param value the value to store
    * @param expirationPolicy the expiration policy for the value
-   * @see ExpiringMap#put(Object, Object, ExpiringMap.ExpirationPolicy)
+   * @see ExpiringMap#put(Object, Object, ExpirationPolicy)
    */
   public ExpiringValue(V value, ExpirationPolicy expirationPolicy) {
     this(value, UNSET_DURATION, null, expirationPolicy);
   }
 
   /**
-   * Creates an ExpiringValue to be stored in an {@link ExpiringMap}. The map's default
-   * {@link ExpiringMap.ExpirationPolicy expiration policy} will be used.
+   * Creates an ExpiringValue to be stored in an {@link ExpiringMap}. The map's default {@link ExpirationPolicy
+   * expiration policy} will be used.
    *
    * @param value the value to store
    * @param duration the length of time after an entry is created that it should be removed
@@ -61,7 +61,7 @@ public final class ExpiringValue<V> {
    * @param duration the length of time after an entry is created that it should be removed
    * @param timeUnit the unit that {@code duration} is expressed in
    * @param expirationPolicy the expiration policy for the value
-   * @see ExpiringMap#put(Object, Object, ExpiringMap.ExpirationPolicy, long, TimeUnit)
+   * @see ExpiringMap#put(Object, Object, ExpirationPolicy, long, TimeUnit)
    * @throws NullPointerException on null timeUnit
    */
   public ExpiringValue(V value, ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
@@ -110,19 +110,13 @@ public final class ExpiringValue<V> {
 
     ExpiringValue<?> that = (ExpiringValue<?>) o;
     return !(value != null ? !value.equals(that.value) : that.value != null)
-        && expirationPolicy == that.expirationPolicy
-        && duration == that.duration
-        && timeUnit == that.timeUnit;
+        && expirationPolicy == that.expirationPolicy && duration == that.duration && timeUnit == that.timeUnit;
 
   }
 
   @Override
   public String toString() {
-    return "ExpiringValue{" +
-        "value=" + value +
-        ", expirationPolicy=" + expirationPolicy +
-        ", duration=" + duration +
-        ", timeUnit=" + timeUnit +
-        '}';
+    return "ExpiringValue{" + "value=" + value + ", expirationPolicy=" + expirationPolicy + ", duration=" + duration
+        + ", timeUnit=" + timeUnit + '}';
   }
 }
