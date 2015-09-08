@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.testng.annotations.Test;
 
@@ -582,6 +583,27 @@ public class ExpiringMapTest extends ConcurrentTestCase {
       fail();
     } catch (NoSuchElementException expected) {
     }
+  }
+
+  public void shouldNotRescheduleWithCreatedPolicy() throws Throwable {
+    final AtomicBoolean expired = new AtomicBoolean();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+        .expiration(180, TimeUnit.MILLISECONDS)
+        .expirationListener(new ExpirationListener<String, String>() {
+          @Override
+          public void expired(String key, String value) {
+            expired.set(true);
+          }
+        })
+        .build();
+    
+    map.put("test", "test");
+    Thread.sleep(100);
+    map.put("test", "test");
+    assertFalse(expired.get());
+    Thread.sleep(100);
+    
+    assertTrue(expired.get());
   }
 
   @Test(expectedExceptions = IllegalStateException.class)
