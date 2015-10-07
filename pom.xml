@@ -9,7 +9,7 @@
 
   <groupId>net.jodah</groupId>
   <artifactId>expiringmap</artifactId>
-  <version>0.5.1-SNAPSHOT</version>
+  <version>0.5.1</version>
   <packaging>jar</packaging>
   <name>ExpiringMap</name>
   <url>http://github.com/jhalterman/expiringmap/</url>
