@@ -1,3 +1,9 @@
+# 0.5.1
+
+### Bug Fixes
+
+* Fixed #20 - Daemonize pooled threads
+
 # 0.5.0
 
 ### New Features
