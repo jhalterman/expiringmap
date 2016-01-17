@@ -124,7 +124,7 @@ map.resetExpiration("foo");
 
 #### On Variable Expiration
 
-When variable expiration is disabled (default), `put` and `remove` operations have a constant O(n) cost. When variable expiration is enabled `put` and `remove` operations have a cost of O(log n).
+When variable expiration is disabled (default), `put` and `remove` operations have a constant O(1) cost. When variable expiration is enabled `put` and `remove` operations have a cost of O(log n).
 
 #### On Expiration Listeners
 
