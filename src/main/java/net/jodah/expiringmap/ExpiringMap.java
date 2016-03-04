@@ -43,7 +43,7 @@ import net.jodah.expiringmap.internal.NamedThreadFactory;
  * based on their first timed duration.
  * 
  * <p>
- * When variable expiration is disabled (default), put/remove operations are constant O(n). When variable expiration is
+ * When variable expiration is disabled (default), put/remove operations are constant O(1). When variable expiration is
  * enabled, put/remove operations impose an <i>O(log n)</i> cost.
  * 
  * <p>
