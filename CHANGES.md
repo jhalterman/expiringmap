@@ -1,3 +1,9 @@
+# 0.5.2
+
+### Improvements
+
+* Added OSGI bundle.
+
 # 0.5.1
 
 ### Bug Fixes
