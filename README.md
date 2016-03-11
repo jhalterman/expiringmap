@@ -130,6 +130,18 @@ When variable expiration is disabled (default), `put` and `remove` operations ha
 
 Expiration listeners should perform work quickly and avoid blocking since they are invoked by default by the ExpiringMap's Timer thread which is also used to expire entries. If an Expration listener blocks or fails to return quickly, ExpiringMap may not be able to expire entries on time. To handle this, any expiration listener whose invocation duration exceeds a set threshold will thereafter be invoked from a separate thread pool to prevent entry expirations from stacking up in the Timer thread.
 
+#### On Google App Engine Integration
+
+Google App Engine users must specify a `ThreadFactory` prior to constructing an `ExpiringMap` instance in order to avoid runtime permission errors:
+
+```java
+
+ExpiringMap.setThreadFactory(com.google.appengine.api.ThreadManager.currentRequestThreadFactory());
+ExpiringMap.builder().build();
+```
+
+See the [GAE docs on threads](https://cloud.google.com/appengine/docs/java/runtime#threads) for more info.
+
 ## Docs
 
 JavaDocs are available [here](https://jhalterman.github.com/expiringmap/javadoc).
