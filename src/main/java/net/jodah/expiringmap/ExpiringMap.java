@@ -20,6 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -74,10 +75,9 @@ import net.jodah.expiringmap.internal.NamedThreadFactory;
  * @param <V> Value type
  */
 public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
-  static final ScheduledExecutorService expirer = Executors
-      .newSingleThreadScheduledExecutor(new NamedThreadFactory("ExpiringMap-Expirer"));
-  static final ThreadPoolExecutor listenerService = (ThreadPoolExecutor) Executors
-      .newCachedThreadPool(new NamedThreadFactory("ExpiringMap-Listener-%s"));
+  static volatile ScheduledExecutorService EXPIRER;
+  static volatile ThreadPoolExecutor LISTENER_SERVICE;
+  private static ThreadFactory THREAD_FACTORY;
   /** Nanoseconds to wait for listener execution */
   private static final long LISTENER_EXECUTION_THRESHOLD = TimeUnit.MILLISECONDS.toNanos(100);
 
@@ -94,11 +94,40 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   private final boolean variableExpiration;
 
   /**
+   * Sets the {@link ThreadFactory} that is used to create expiration and listener callback threads for all ExpiringMap
+   * instances.
+   * 
+   * @param threadFactory
+   * @throws NullPointerException if {@code threadFactory} is null
+   */
+  public static void setThreadFactory(ThreadFactory threadFactory) {
+    threadFactory = Assert.notNull(threadFactory, "threadFactory");
+  }
+
+  /**
    * Creates a new instance of ExpiringMap.
    * 
    * @param builder The map builder
    */
   private ExpiringMap(final Builder<K, V> builder) {
+    if (LISTENER_SERVICE == null) {
+      synchronized (this) {
+        if (LISTENER_SERVICE == null) {
+          LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
+              THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
+        }
+      }
+    }
+
+    if (EXPIRER == null) {
+      synchronized (this) {
+        if (EXPIRER == null) {
+          EXPIRER = Executors.newSingleThreadScheduledExecutor(
+              THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Expirer") : THREAD_FACTORY);
+        }
+      }
+    }
+
     variableExpiration = builder.variableExpiration;
     entries = variableExpiration ? new EntryTreeHashMap<K, V>() : new EntryLinkedHashMap<K, V>();
     if (builder.expirationListeners != null)
@@ -1071,7 +1100,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         } catch (Exception ignoreUserExceptions) {
         }
       else if (listener.executionPolicy == 1)
-        listenerService.execute(new Runnable() {
+        LISTENER_SERVICE.execute(new Runnable() {
           public void run() {
             try {
               listener.expirationListener.expired(entry.key, entry.getValue());
@@ -1187,7 +1216,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         }
       };
 
-      Future<?> entryFuture = expirer.schedule(runnable, entry.expectedExpiration.get() - System.nanoTime(),
+      Future<?> entryFuture = EXPIRER.schedule(runnable, entry.expectedExpiration.get() - System.nanoTime(),
           TimeUnit.NANOSECONDS);
       entry.schedule(entryFuture);
     }

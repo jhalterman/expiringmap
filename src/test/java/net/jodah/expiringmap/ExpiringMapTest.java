@@ -16,6 +16,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Random;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -190,7 +191,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
       public void expired(String thekey, String thevalue) {
         try {
           if (counter[0]++ > 0)
-            threadAssertEquals(1, ExpiringMap.listenerService.getActiveCount());
+            threadAssertEquals(1, ExpiringMap.LISTENER_SERVICE.getActiveCount());
 
           Thread.sleep(110);
         } catch (InterruptedException e) {
@@ -215,7 +216,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     map.addExpirationListener(new ExpirationListener<String, String>() {
       public void expired(String thekey, String thevalue) {
         if (counter[0]++ > 0)
-          threadAssertEquals(0, ExpiringMap.listenerService.getActiveCount());
+          threadAssertEquals(0, ExpiringMap.LISTENER_SERVICE.getActiveCount());
 
         resume();
       }
@@ -596,13 +597,13 @@ public class ExpiringMapTest extends ConcurrentTestCase {
           }
         })
         .build();
-    
+
     map.put("test", "test");
     Thread.sleep(100);
     map.put("test", "test");
     assertFalse(expired.get());
     Thread.sleep(100);
-    
+
     assertTrue(expired.get());
   }
 
@@ -619,5 +620,18 @@ public class ExpiringMapTest extends ConcurrentTestCase {
         return null;
       }
     });
+  }
+
+  public void testThreadFactory() throws Throwable {
+    ExpiringMap.EXPIRER = null;
+    ExpiringMap.LISTENER_SERVICE = null;
+    
+    ExpiringMap.setThreadFactory(Executors.defaultThreadFactory());
+    ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
+
+    map.put("foo", "bar");
+
+    Thread.sleep(150);
+    assertTrue(map.isEmpty());
   }
 }
