@@ -13,9 +13,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,7 +40,29 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   public void testCreate() {
     assertNotNull(ExpiringMap.create());
   }
+  
+  public void testContainsKey() {
+    ExpiringMap<String, String> map = ExpiringMap.create();
+    map.put("a", "a");
+    
+    assertTrue(map.containsKey("a"));
+    assertFalse(map.containsKey("b"));
+  }
 
+  public void testContainsValue() {
+    ExpiringMap<String, String> map = ExpiringMap.create();
+    map.put("a", "a");
+    
+    assertTrue(map.containsValue("a"));
+    assertFalse(map.containsValue("b"));
+    
+    ExpiringMap<String, String> variableMap = ExpiringMap.builder().variableExpiration().build();
+    variableMap.put("a", "a");
+    
+    assertTrue(variableMap.containsValue("a"));
+    assertFalse(variableMap.containsValue("b"));
+  }
+  
   /**
    * Tests {@link ExpiringMap#values()}.
    */
@@ -51,8 +75,25 @@ public class ExpiringMapTest extends ConcurrentTestCase {
     for (String fixture : fixtures)
       map.put(fixture, fixture);
 
-    values = map.values();
     assertEquals(values, Arrays.asList(fixtures));
+    assertTrue(values.containsAll(Arrays.asList(fixtures)));
+  }
+
+  /**
+   * Tests {@link ExpiringMap#entrySet()}.
+   */
+  public void testEntrySet() {
+    ExpiringMap<String, String> map = ExpiringMap.create();
+    Set<Map.Entry<String, String>> entrySet = map.entrySet();
+    assertTrue(entrySet.isEmpty());
+
+    String[] fixtures = new String[] { "a", "b", "c", "d" };
+    for (String fixture : fixtures)
+      map.put(fixture, fixture);
+
+    List<String> fixturesList = Arrays.asList(fixtures);
+    for (Map.Entry<String, String> entry : entrySet)
+      assertTrue(fixturesList.contains(entry.getKey()));
   }
 
   /**
@@ -625,7 +666,7 @@ public class ExpiringMapTest extends ConcurrentTestCase {
   public void testThreadFactory() throws Throwable {
     ExpiringMap.EXPIRER = null;
     ExpiringMap.LISTENER_SERVICE = null;
-    
+
     ExpiringMap.setThreadFactory(Executors.defaultThreadFactory());
     ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
 

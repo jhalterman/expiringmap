@@ -291,6 +291,16 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     private static final long serialVersionUID = 1L;
 
     @Override
+    public boolean containsValue(Object value) {
+      for (ExpiringEntry<K, V> entry : values()) {
+        V v = entry.value;
+        if (v == value || (value != null && value.equals(v)))
+          return true;
+      }
+      return false;
+    }
+
+    @Override
     public ExpiringEntry<K, V> first() {
       return isEmpty() ? null : values().iterator().next();
     }
@@ -352,6 +362,16 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     public void clear() {
       super.clear();
       sortedSet.clear();
+    }
+    
+    @Override
+    public boolean containsValue(Object value) {
+      for (ExpiringEntry<K, V> entry : values()) {
+        V v = entry.value;
+        if (v == value || (value != null && value.equals(v)))
+          return true;
+      }
+      return false;
     }
 
     @Override
