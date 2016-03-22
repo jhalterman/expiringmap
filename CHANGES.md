@@ -1,3 +1,13 @@
+# 0.5.3
+
+### Improvements
+
+* Added Google App Engine support via `ExpiringMap.setThreadFactory(ThreadFactory)`.
+
+### Bug Fixes
+
+* Fixed #28 - Problems with `map.containsValue()` and `values().containsAll()`.
+
 # 0.5.2
 
 ### Improvements
