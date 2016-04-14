@@ -2,6 +2,7 @@
 [![Build Status](https://travis-ci.org/jhalterman/expiringmap.svg)](https://travis-ci.org/jhalterman/expiringmap)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/net.jodah/expiringmap/badge.svg)](https://maven-badges.herokuapp.com/maven-central/net.jodah/expiringmap/)
 [![License](http://img.shields.io/:license-apache-brightgreen.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
+[![JavaDoc](http://javadoc-badge.appspot.com/net.jodah/expiringmap.svg?label=javadoc)](https://jhalterman.github.com/expiringmap/javadoc)
 
 A high performance, low-overhead, zero dependency, thread-safe [ConcurrentMap](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ConcurrentMap.html) implementation that expires entries. Features include:
 
@@ -77,7 +78,7 @@ Map<String, Connection> map = ExpiringMap.builder()
   .build();
 ```
 
-Expiration listeners are called synchronously as entries expire, and write operations to the map are blocked until the listeners complete. Asynchronous expiration listeners can also be configured and are called in a separate thread without blocking map operations:
+Expiration listeners are called synchronously as entries expire, and write operations to the map are blocked until the listeners complete. Asynchronous expiration listeners can also be configured and are called in a separate thread pool without blocking map operations:
 
 ```java
 Map<String, Connection> map = ExpiringMap.builder()
@@ -139,7 +140,7 @@ map.getExpiration("jodah.net");
 
 #### On Variable Expiration
 
-When variable expiration is disabled (default), `put` and `remove` operations have a constant O(1) cost. When variable expiration is enabled `put` and `remove` operations have a cost of O(log n).
+When variable expiration is disabled (default), `put` and `remove` operations have a constant *O(1)* time complexity. When variable expiration is enabled, `put` and `remove` operations have a time complexity of *O(log n)*.
 
 #### On Google App Engine Integration
 

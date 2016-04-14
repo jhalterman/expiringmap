@@ -43,8 +43,8 @@ import net.jodah.expiringmap.internal.NamedThreadFactory;
  * completed. Asynchronous expiration listeners are called on a separate thread pool and do not block map operations.
  * 
  * <p>
- * When variable expiration is disabled (default), put/remove operations are constant O(1). When variable expiration is
- * enabled, put/remove operations impose an <i>O(log n)</i> cost.
+ * When variable expiration is disabled (default), put/remove operations have a time complexity <i>O(1)</i>. When
+ * variable expiration is enabled, put/remove operations have time complexity of <i>O(log n)</i>.
  * 
  * <p>
  * Example usages:
