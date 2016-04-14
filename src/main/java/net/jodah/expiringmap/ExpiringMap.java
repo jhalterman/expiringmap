@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.Timer;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -37,11 +36,11 @@ import net.jodah.expiringmap.internal.NamedThreadFactory;
  * lazy entry loading, and expiration listeners.
  * 
  * <p>
- * Entries are tracked by expiration time and expired by a single {@link Timer} thread.
+ * Entries are tracked by expiration time and expired by a single thread.
  * 
  * <p>
- * Expiration listeners will automatically be assigned to run in the context of the Timer thread or in a separate thread
- * based on their first timed duration.
+ * Expiration listeners are called synchronously as entries are expires and block write operations to the map until they
+ * completed. Asynchronous expiration listeners are called on a separate thread pool and do not block map operations.
  * 
  * <p>
  * When variable expiration is disabled (default), put/remove operations are constant O(1). When variable expiration is
@@ -77,11 +76,10 @@ import net.jodah.expiringmap.internal.NamedThreadFactory;
 public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   static volatile ScheduledExecutorService EXPIRER;
   static volatile ThreadPoolExecutor LISTENER_SERVICE;
-  private static ThreadFactory THREAD_FACTORY;
-  /** Nanoseconds to wait for listener execution */
-  private static final long LISTENER_EXECUTION_THRESHOLD = TimeUnit.MILLISECONDS.toNanos(100);
+  static ThreadFactory THREAD_FACTORY;
 
-  List<ExpirationListenerConfig<K, V>> expirationListeners;
+  List<ExpirationListener<K, V>> expirationListeners;
+  List<ExpirationListener<K, V>> asyncExpirationListeners;
   private AtomicLong expirationNanos;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
   private final EntryLoader<? super K, ? extends V> entryLoader;
@@ -110,15 +108,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @param builder The map builder
    */
   private ExpiringMap(final Builder<K, V> builder) {
-    if (LISTENER_SERVICE == null) {
-      synchronized (this) {
-        if (LISTENER_SERVICE == null) {
-          LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
-              THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
-        }
-      }
-    }
-
     if (EXPIRER == null) {
       synchronized (this) {
         if (EXPIRER == null) {
@@ -128,10 +117,21 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       }
     }
 
+    if (LISTENER_SERVICE == null && builder.asyncExpirationListeners != null) {
+      synchronized (this) {
+        if (LISTENER_SERVICE == null) {
+          LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
+              THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
+        }
+      }
+    }
+
     variableExpiration = builder.variableExpiration;
     entries = variableExpiration ? new EntryTreeHashMap<K, V>() : new EntryLinkedHashMap<K, V>();
     if (builder.expirationListeners != null)
-      expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>(builder.expirationListeners);
+      expirationListeners = new CopyOnWriteArrayList<ExpirationListener<K, V>>(builder.expirationListeners);
+    if (builder.asyncExpirationListeners != null)
+      asyncExpirationListeners = new CopyOnWriteArrayList<ExpirationListener<K, V>>(builder.asyncExpirationListeners);
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
     expirationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
     entryLoader = builder.entryLoader;
@@ -143,7 +143,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    */
   public static final class Builder<K, V> {
     private ExpirationPolicy expirationPolicy = ExpirationPolicy.CREATED;
-    private List<ExpirationListenerConfig<K, V>> expirationListeners;
+    private List<ExpirationListener<K, V>> expirationListeners;
+    private List<ExpirationListener<K, V>> asyncExpirationListeners;
     private TimeUnit timeUnit = TimeUnit.SECONDS;
     private boolean variableExpiration;
     private long duration = 60;
@@ -213,7 +214,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     /**
-     * Sets the expiration listener which will receive notifications upon each map entry's expiration.
+     * Configures the expiration listener that will receive notifications upon each map entry's expiration.
      * 
      * @param listener to set
      * @throws NullPointerException if {@code listener} is null
@@ -223,13 +224,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         ExpirationListener<? super K1, ? super V1> listener) {
       Assert.notNull(listener, "listener");
       if (expirationListeners == null)
-        expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>();
-      expirationListeners.add(new ExpirationListenerConfig<K, V>((ExpirationListener<K, V>) listener));
+        expirationListeners = new ArrayList<ExpirationListener<K, V>>();
+      expirationListeners.add((ExpirationListener<K, V>) listener);
       return (Builder<K1, V1>) this;
     }
 
     /**
-     * Sets expiration listeners which will receive notifications upon each map entry's expiration.
+     * Configures the expiration listeners which will receive notifications upon each map entry's expiration.
      * 
      * @param listeners to set
      * @throws NullPointerException if {@code listener} is null
@@ -239,14 +240,49 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         List<ExpirationListener<? super K1, ? super V1>> listeners) {
       Assert.notNull(listeners, "listeners");
       if (expirationListeners == null)
-        expirationListeners = new ArrayList<ExpirationListenerConfig<K, V>>(listeners.size());
+        expirationListeners = new ArrayList<ExpirationListener<K, V>>(listeners.size());
       for (ExpirationListener<? super K1, ? super V1> listener : listeners)
-        expirationListeners.add(new ExpirationListenerConfig<K, V>((ExpirationListener<K, V>) listener));
+        expirationListeners.add((ExpirationListener<K, V>) listener);
       return (Builder<K1, V1>) this;
     }
 
     /**
-     * Sets the map entry expiration policy.
+     * Configures the expiration listener which will receive asynchronous notifications upon each map entry's
+     * expiration.
+     * 
+     * @param listener to set
+     * @throws NullPointerException if {@code listener} is null
+     */
+    @SuppressWarnings("unchecked")
+    public <K1 extends K, V1 extends V> Builder<K1, V1> asyncExpirationListener(
+        ExpirationListener<? super K1, ? super V1> listener) {
+      Assert.notNull(listener, "listener");
+      if (asyncExpirationListeners == null)
+        asyncExpirationListeners = new ArrayList<ExpirationListener<K, V>>();
+      asyncExpirationListeners.add((ExpirationListener<K, V>) listener);
+      return (Builder<K1, V1>) this;
+    }
+
+    /**
+     * Configures the expiration listeners which will receive asynchronous notifications upon each map entry's
+     * expiration.
+     * 
+     * @param listeners to set
+     * @throws NullPointerException if {@code listener} is null
+     */
+    @SuppressWarnings("unchecked")
+    public <K1 extends K, V1 extends V> Builder<K1, V1> asyncExpirationListeners(
+        List<ExpirationListener<? super K1, ? super V1>> listeners) {
+      Assert.notNull(listeners, "listeners");
+      if (asyncExpirationListeners == null)
+        asyncExpirationListeners = new ArrayList<ExpirationListener<K, V>>(listeners.size());
+      for (ExpirationListener<? super K1, ? super V1> listener : listeners)
+        asyncExpirationListeners.add((ExpirationListener<K, V>) listener);
+      return (Builder<K1, V1>) this;
+    }
+
+    /**
+     * Configures the map entry expiration policy.
      * 
      * @param expirationPolicy
      * @throws NullPointerException if {@code expirationPolicy} is null
@@ -353,7 +389,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** Entry TreeHashMap implementation. */
+  /** Entry TreeHashMap implementation for variable expiration ExpiringMap entries. */
   private static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>>implements EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
     SortedSet<ExpiringEntry<K, V>> sortedSet = new TreeSet<ExpiringEntry<K, V>>();
@@ -363,7 +399,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       super.clear();
       sortedSet.clear();
     }
-    
+
     @Override
     public boolean containsValue(Object value) {
       for (ExpiringEntry<K, V> entry : values()) {
@@ -445,18 +481,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       public final Map.Entry<K, V> next() {
         return mapEntryFor(getNext());
       }
-    }
-  }
-
-  /** Provides an expiration listener configuration. */
-  static class ExpirationListenerConfig<K, V> {
-    final ExpirationListener<K, V> expirationListener;
-    /** -1 = initial, 0 = synchronous, 1 = asynchronous */
-    int executionPolicy = -1;
-
-    /** Constructs a new ExpirationListenerConfig. */
-    ExpirationListenerConfig(ExpirationListener<K, V> expirationListener) {
-      this.expirationListener = expirationListener;
     }
   }
 
@@ -595,11 +619,24 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @param listener to add
    * @throws NullPointerException if {@code listener} is null
    */
-  public void addExpirationListener(ExpirationListener<K, V> listener) {
+  public synchronized void addExpirationListener(ExpirationListener<K, V> listener) {
     Assert.notNull(listener, "listener");
     if (expirationListeners == null)
-      expirationListeners = new CopyOnWriteArrayList<ExpirationListenerConfig<K, V>>();
-    expirationListeners.add(new ExpirationListenerConfig<K, V>(listener));
+      expirationListeners = new CopyOnWriteArrayList<ExpirationListener<K, V>>();
+    expirationListeners.add(listener);
+  }
+
+  /**
+   * Adds an asynchronous expiration listener.
+   * 
+   * @param listener to add
+   * @throws NullPointerException if {@code listener} is null
+   */
+  public synchronized void addAsyncExpirationListener(ExpirationListener<K, V> listener) {
+    Assert.notNull(listener, "listener");
+    if (asyncExpirationListeners == null)
+      asyncExpirationListeners = new CopyOnWriteArrayList<ExpirationListener<K, V>>();
+    asyncExpirationListeners.add(listener);
   }
 
   @Override
@@ -684,7 +721,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public V get(Object key) {
-    ExpiringEntry<K, V> entry = readEntry(key);
+    ExpiringEntry<K, V> entry = getEntry(key);
 
     if (entry == null) {
       @SuppressWarnings("unchecked")
@@ -738,14 +775,31 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    */
   public long getExpiration(K key) {
     Assert.notNull(key, "key");
-    ExpiringEntry<K, V> entry = readEntry(key);
+    ExpiringEntry<K, V> entry = getEntry(key);
     if (entry == null)
       throw new NoSuchElementException();
     return TimeUnit.NANOSECONDS.toMillis(entry.expirationNanos.get());
   }
 
   /**
-   * Gets the expected expiration in milliseconds for the entry corresponding to the given key.
+   * Gets the ExpirationPolicy for the entry corresponding to the given {@code key}.
+   * 
+   * @param key
+   * @return The ExpirationPolicy for the {@code key}
+   * @throws NullPointerException if {@code key} is null
+   * @throws NoSuchElementException If no entry exists for the given key
+   */
+  public ExpirationPolicy getExpirationPolicy(K key) {
+    Assert.notNull(key, "key");
+    ExpiringEntry<K, V> entry = getEntry(key);
+    if (entry == null)
+      throw new NoSuchElementException();
+    return entry.expirationPolicy.get();
+  }
+
+  /**
+   * Gets the expected expiration in milliseconds from the current time for the entry corresponding to the given
+   * {@code key}.
    * 
    * @param key
    * @return The expiration duration in milliseconds
@@ -754,7 +808,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    */
   public long getExpectedExpiration(K key) {
     Assert.notNull(key, "key");
-    ExpiringEntry<K, V> entry = readEntry(key);
+    ExpiringEntry<K, V> entry = getEntry(key);
     if (entry == null)
       throw new NoSuchElementException();
     return TimeUnit.NANOSECONDS.toMillis(entry.expectedExpiration.get() - System.nanoTime());
@@ -964,8 +1018,24 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   public void removeExpirationListener(ExpirationListener<K, V> listener) {
     Assert.notNull(listener, "listener");
     for (int i = 0; i < expirationListeners.size(); i++) {
-      if (expirationListeners.get(i).expirationListener.equals(listener)) {
+      if (expirationListeners.get(i).equals(listener)) {
         expirationListeners.remove(i);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Removes an asynchronous expiration listener.
+   * 
+   * @param listener
+   * @throws NullPointerException if {@code listener} is null
+   */
+  public void removeAsyncExpirationListener(ExpirationListener<K, V> listener) {
+    Assert.notNull(listener, "listener");
+    for (int i = 0; i < asyncExpirationListeners.size(); i++) {
+      if (asyncExpirationListeners.get(i).equals(listener)) {
+        asyncExpirationListeners.remove(i);
         return;
       }
     }
@@ -979,7 +1049,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    */
   public void resetExpiration(K key) {
     Assert.notNull(key, "key");
-    ExpiringEntry<K, V> entry = readEntry(key);
+    ExpiringEntry<K, V> entry = getEntry(key);
     if (entry != null)
       resetEntry(entry, false);
   }
@@ -1045,24 +1115,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     Assert.notNull(key, "key");
     Assert.notNull(expirationPolicy, "expirationPolicy");
     Assert.operation(variableExpiration, "Variable expiration is not enabled");
-    ExpiringEntry<K, V> entry = readEntry(key);
+    ExpiringEntry<K, V> entry = getEntry(key);
     if (entry != null)
       entry.expirationPolicy.set(expirationPolicy);
-  }
-
-  private ExpiringEntry<K, V> readEntry(Object key) {
-    readLock.lock();
-    try {
-      return entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
-  }
-
-  /* Visible for testing */
-  ExpirationPolicy getExpirationPolicy(K key) {
-    ExpiringEntry<K, V> entry = readEntry(key);
-    return entry == null ? null : entry.expirationPolicy.get();
   }
 
   @Override
@@ -1112,40 +1167,41 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Notifies expiration listeners that the given entry expired. Utilizes an expiration policy to invoke the listener.
-   * If the listener's initial execution exceeds LISTENER_EXECUTION_THRESHOLD then the listener will be invoked within
-   * the context of {@code listenerService}, else it will be invoked within the context of {@code timer}. Must not be
-   * called from within a locked context.
+   * Notifies expiration listeners that the given entry expired. Must not be called from within a locked context.
    * 
    * @param entry Entry to expire
    */
   void notifyListeners(final ExpiringEntry<K, V> entry) {
-    if (expirationListeners == null)
-      return;
-
-    for (final ExpirationListenerConfig<K, V> listener : expirationListeners) {
-      if (listener.executionPolicy == -1) {
-        long startTime = System.nanoTime();
-        try {
-          listener.expirationListener.expired(entry.key, entry.getValue());
-        } catch (Exception ignoreUserExceptions) {
-        }
-        long endTime = System.nanoTime();
-        listener.executionPolicy = startTime + LISTENER_EXECUTION_THRESHOLD > endTime ? 0 : 1;
-      } else if (listener.executionPolicy == 0)
-        try {
-          listener.expirationListener.expired(entry.key, entry.getValue());
-        } catch (Exception ignoreUserExceptions) {
-        }
-      else if (listener.executionPolicy == 1)
+    if (asyncExpirationListeners != null)
+      for (final ExpirationListener<K, V> listener : asyncExpirationListeners) {
         LISTENER_SERVICE.execute(new Runnable() {
           public void run() {
             try {
-              listener.expirationListener.expired(entry.key, entry.getValue());
+              listener.expired(entry.key, entry.getValue());
             } catch (Exception ignoreUserExceptions) {
             }
           }
         });
+      }
+
+    if (expirationListeners != null)
+      for (final ExpirationListener<K, V> listener : expirationListeners) {
+        try {
+          listener.expired(entry.key, entry.getValue());
+        } catch (Exception ignoreUserExceptions) {
+        }
+      }
+  }
+
+  /**
+   * Returns the internal ExpiringEntry for the {@code key}, obtaining a read lock.
+   */
+  ExpiringEntry<K, V> getEntry(Object key) {
+    readLock.lock();
+    try {
+      return entries.get(key);
+    } finally {
+      readLock.unlock();
     }
   }
 

@@ -1,3 +1,10 @@
+# 0.5.4
+
+### New Features
+
+* Added `getExpirationPolicy(key)`
+* Added separate asynchronous expiration listener APIs
+
 # 0.5.3
 
 ### Improvements

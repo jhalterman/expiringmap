@@ -10,6 +10,8 @@ A high performance, low-overhead, zero dependency, thread-safe [ConcurrentMap](h
 * [Expiration listeners](#expiration-listeners)
 * [Lazy entry loading](#lazy-entry-loading)
 
+Supports Java 6+ though the documentation uses lambdas for simplicity.
+
 ## Usage
 
 ExpiringMap allows you to create a map that expires entries after a certain time period:
@@ -69,10 +71,15 @@ Expiration listeners can be notified when an entry expires:
 
 ```java
 Map<String, Connection> map = ExpiringMap.builder()
-  .expirationListener(new ExpirationListener<String, Connection>() { 
-    public void expired(String key, Connection connection) { 
-      connection.close(); 
-    })
+  .expirationListener((key, connection) -> connection.close())
+  .build();
+```
+
+Expiration listeners are called synchronously as entries are expires and block write operations to the map until they completed. Asynchronous expiration listeners can also be configured. These are called on a separate thread pool and do not block map operations:
+
+```java
+Map<String, Connection> map = ExpiringMap.builder()
+  .asyncExpirationListener((key, connection) -> connection.close())
   .build();
 ```
 
@@ -83,11 +90,7 @@ Entries can be lazily loaded via an `EntryLoader` when `ExpiringMap.get` is call
 ```java
 Map<String, Connection> connections = ExpiringMap.builder()
   .expiration(10, TimeUnit.MINUTES)
-  .entryLoader(new EntryLoader<String, Connection>() {
-    public Connection load(String address) {
-      return new Connection(address);
-    }
-  })
+  .entryLoader(address -> new Connection(address))
   .build();
   
 // Loads a new connection into the map via the EntryLoader
@@ -98,11 +101,7 @@ Lazily loaded entries can also be made to expire at varying times:
 
 ```java
 Map<String, Connection> connections = ExpiringMap.builder()
-  .expiringEntry(new ExpiringEntryLoader<String, Connection>() {
-    public ExpiringValue<Connection> load(String address) {
-      return new ExpiringValue(new Connection(address), 5, TimeUnit.MINUTES);
-    }
-  })
+  .expiringEntry(address -> new ExpiringValue(new Connection(address), 5, TimeUnit.MINUTES))
   .build();
 ```
 
@@ -126,10 +125,6 @@ map.resetExpiration("foo");
 
 When variable expiration is disabled (default), `put` and `remove` operations have a constant O(1) cost. When variable expiration is enabled `put` and `remove` operations have a cost of O(log n).
 
-#### On Expiration Listeners
-
-Expiration listeners should perform work quickly and avoid blocking since they are invoked by default by the ExpiringMap's Timer thread which is also used to expire entries. If an Expration listener blocks or fails to return quickly, ExpiringMap may not be able to expire entries on time. To handle this, any expiration listener whose invocation duration exceeds a set threshold will thereafter be invoked from a separate thread pool to prevent entry expirations from stacking up in the Timer thread.
-
 #### On Google App Engine Integration
 
 Google App Engine users must specify a `ThreadFactory` prior to constructing an `ExpiringMap` instance in order to avoid runtime permission errors:
@@ -148,4 +143,4 @@ JavaDocs are available [here](https://jhalterman.github.com/expiringmap/javadoc)
 
 ## License
 
-Copyright 2009-2015 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
+Copyright 2009-2016 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
