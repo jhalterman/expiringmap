@@ -798,7 +798,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Gets the expected expiration in milliseconds from the current time for the entry corresponding to the given
+   * Gets the expected expiration, in milliseconds from the current time, for the entry corresponding to the given
    * {@code key}.
    * 
    * @param key
@@ -1093,7 +1093,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Sets the global expiration policy for the map.
+   * Sets the global expiration policy for the map. Individual expiration policies may override the global policy.
    * 
    * @param expirationPolicy
    * @throws NullPointerException {@code expirationPolicy} is null

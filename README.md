@@ -6,9 +6,10 @@
 A high performance, low-overhead, zero dependency, thread-safe [ConcurrentMap](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ConcurrentMap.html) implementation that expires entries. Features include:
 
 * [Expiration policies](#expiration-policies)
-* [Variable entry expiration](#variable-expiration)
+* [Variable expiration](#variable-expiration)
 * [Expiration listeners](#expiration-listeners)
 * [Lazy entry loading](#lazy-entry-loading)
+* [Expiration Introspection](#expiration-introspection)
 
 Supports Java 6+ though the documentation uses lambdas for simplicity.
 
@@ -22,7 +23,7 @@ Map<String, Connection> map = ExpiringMap.builder()
   .build();
   
 // Expires after 30 seconds
-map.put("foo", 5);
+map.put("connection", connection);
 ```
 
 #### Expiration Policies
@@ -38,13 +39,13 @@ Map<String, Connection> map = ExpiringMap.builder()
 We can also specify an expiration policy for individual entries:
 
 ```java
-map.put("foo", "bar", ExpirationPolicy.CREATED);
+map.put("connection", connection, ExpirationPolicy.CREATED);
 ```
 
 And we can change policies on the fly:
 
 ```java
-map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
+map.setExpirationPolicy("connection", ExpirationPolicy.ACCESSED);
 ```
 
 #### Variable Expiration
@@ -52,17 +53,18 @@ map.setExpirationPolicy("foo", ExpirationPolicy.ACCESSED);
 Entries can have individually variable expiration times and policies:
 
 ```java
-ExpiringMap<String, String> map = ExpiringMap.builder()
+ExpiringMap<String, Connection> map = ExpiringMap.builder()
   .variableExpiration()
   .build();
 
-map.put("foo", "bar", ExpirationPolicy.ACCESSED, 5, TimeUnit.SECONDS);
+map.put("connection", connection, ExpirationPolicy.ACCESSED, 5, TimeUnit.MINUTES);
 ```
 
-Expiration times can also be changed on the fly:
+Expiration times and policies can also be changed on the fly:
 
 ```java
-map.setExpiration("foo", 5, TimeUnit.SECONDS);
+map.setExpiration(connection, 5, TimeUnit.MINUTES);
+map.setExpirationPolicy(connection, ExpirationPolicy.ACCESSED);
 ```
 
 #### Expiration Listeners
@@ -75,12 +77,20 @@ Map<String, Connection> map = ExpiringMap.builder()
   .build();
 ```
 
-Expiration listeners are called synchronously as entries are expires and block write operations to the map until they completed. Asynchronous expiration listeners can also be configured. These are called on a separate thread pool and do not block map operations:
+Expiration listeners are called synchronously as entries expire, and write operations to the map are blocked until the listeners complete. Asynchronous expiration listeners can also be configured and are called in a separate thread without blocking map operations:
 
 ```java
 Map<String, Connection> map = ExpiringMap.builder()
   .asyncExpirationListener((key, connection) -> connection.close())
   .build();
+```
+
+Expiration listeners can also be added and removed on the fly:
+
+```java
+ExpirationListener<String, Connection> connectionCloser = (key, connection) -> connection.close();
+map.addExpirationListener(connectionCloser);
+map.removeExpirationListener(connectionCloser);
 ```
 
 #### Lazy Entry Loading
@@ -94,7 +104,7 @@ Map<String, Connection> connections = ExpiringMap.builder()
   .build();
   
 // Loads a new connection into the map via the EntryLoader
-connections.get("http://jodah.net");
+connections.get("jodah.net");
 ```
 
 Lazily loaded entries can also be made to expire at varying times:
@@ -110,13 +120,19 @@ Map<String, Connection> connections = ExpiringMap.builder()
 ExpiringMap allows you to learn when an entry is expected to expire:
 
 ```java
-long expiration = map.getExpectedExpiration("foo");
+long expiration = map.getExpectedExpiration("jodah.net");
 ```
 
 We can also reset the internal expiration timer for an entry:
 
 ```java
-map.resetExpiration("foo");
+map.resetExpiration("jodah.net");
+```
+
+And we can learn the configured expiration for individual entries:
+
+```java
+map.getExpiration("jodah.net");
 ```
 
 ## Additional Notes
@@ -132,7 +148,7 @@ Google App Engine users must specify a `ThreadFactory` prior to constructing an 
 ```java
 
 ExpiringMap.setThreadFactory(com.google.appengine.api.ThreadManager.currentRequestThreadFactory());
-ExpiringMap.builder().build();
+ExpiringMap.create();
 ```
 
 See the [GAE docs on threads](https://cloud.google.com/appengine/docs/java/runtime#threads) for more info.
