@@ -90,6 +90,7 @@
           <excludePackageNames>*.internal:*.internal.*</excludePackageNames>
           <additionalparam>
             -Xdoclint:none
+            -notimestamp
             -link http://docs.oracle.com/javase/8/docs/api/
           </additionalparam>
         </configuration>
