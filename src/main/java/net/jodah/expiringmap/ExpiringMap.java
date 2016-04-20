@@ -776,8 +776,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   public long getExpiration(K key) {
     Assert.notNull(key, "key");
     ExpiringEntry<K, V> entry = getEntry(key);
-    if (entry == null)
-      throw new NoSuchElementException();
+    Assert.element(entry, key);
     return TimeUnit.NANOSECONDS.toMillis(entry.expirationNanos.get());
   }
 
@@ -792,8 +791,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   public ExpirationPolicy getExpirationPolicy(K key) {
     Assert.notNull(key, "key");
     ExpiringEntry<K, V> entry = getEntry(key);
-    if (entry == null)
-      throw new NoSuchElementException();
+    Assert.element(entry, key);
     return entry.expirationPolicy.get();
   }
 
@@ -809,8 +807,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   public long getExpectedExpiration(K key) {
     Assert.notNull(key, "key");
     ExpiringEntry<K, V> entry = getEntry(key);
-    if (entry == null)
-      throw new NoSuchElementException();
+    Assert.element(entry, key);
     return TimeUnit.NANOSECONDS.toMillis(entry.expectedExpiration.get() - System.nanoTime());
   }
 
