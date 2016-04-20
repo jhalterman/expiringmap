@@ -30,7 +30,7 @@ public class DeadlockTest {
 
     final ExpiringMap<String, Long> map = ExpiringMap.builder()
         .expiration(duration, TimeUnit.MILLISECONDS)
-        .expirationListener((key, valye) -> {
+        .expirationListener((key, value) -> {
           if (key.equals(finalKey))
             waiter.resume();
         })

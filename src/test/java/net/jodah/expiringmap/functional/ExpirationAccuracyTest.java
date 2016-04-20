@@ -42,13 +42,11 @@ public class ExpirationAccuracyTest extends ConcurrentTestCase {
   private void putTest(final int threadCount, final int mapCount, final long duration) throws Throwable {
     final String finalKey = "final";
 
-    ExpirationListener<String, Long> expirationListener = new ExpirationListener<String, Long>() {
-      public void expired(String key, Long startTime) {
-        // Assert that expiration is within 1/10 second of expected time
-        threadAssertTrue(System.currentTimeMillis() - (startTime + duration) < 100);
-        if (key.equals(finalKey))
-          resume();
-      }
+    ExpirationListener<String, Long> expirationListener = (key, startTime) -> {
+      // Assert that expiration is within 1/10 second of expected time
+      threadAssertTrue(System.currentTimeMillis() - (startTime + duration) < 100);
+      if (key.equals(finalKey))
+        resume();
     };
 
     ExpiringMap.Builder builder = ExpiringMap.builder()
@@ -59,22 +57,20 @@ public class ExpirationAccuracyTest extends ConcurrentTestCase {
     for (int i = 0; i < mapCount; i++)
       maps[i] = builder.build();
 
-    threadedRun(threadCount, new Runnable() {
-      public void run() {
-        Random mapRandom = new Random();
-        Random keyRandom = new Random();
-        Random sleepRandom = new Random();
+    threadedRun(threadCount, () -> {
+      Random mapRandom = new Random();
+      Random keyRandom = new Random();
+      Random sleepRandom = new Random();
 
-        try {
-          for (int i = 0; i < 10000; i++) {
-            maps[mapRandom.nextInt(mapCount)].put("key" + keyRandom.nextInt(1000), System.currentTimeMillis());
-            Thread.sleep(sleepRandom.nextInt(2) + 1);
-          }
-        } catch (Exception e) {
-          threadFail(e);
-        } finally {
-          resume();
+      try {
+        for (int i = 0; i < 10000; i++) {
+          maps[mapRandom.nextInt(mapCount)].put("key" + keyRandom.nextInt(1000), System.currentTimeMillis());
+          Thread.sleep(sleepRandom.nextInt(2) + 1);
         }
+      } catch (Exception e) {
+        threadFail(e);
+      } finally {
+        resume();
       }
     });
 
