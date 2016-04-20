@@ -1,3 +1,9 @@
+# 0.5.5
+
+### Bug Fixes
+
+* Fixed #29 - `remove(Object)` releases write lock prematurely
+
 # 0.5.4
 
 ### New Features
