@@ -945,20 +945,17 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   @Override
   public V remove(Object key) {
     Assert.notNull(key, "key");
-    ExpiringEntry<K, V> entry = null;
     writeLock.lock();
     try {
-      entry = entries.remove(key);
+      ExpiringEntry<K, V> entry = entries.remove(key);
+      if (entry == null)
+        return null;
+      if (entry.cancel(false))
+        scheduleEntry(entries.first());
+      return entry.getValue();
     } finally {
       writeLock.unlock();
     }
-
-    if (entry == null)
-      return null;
-    if (entry.cancel(false))
-      scheduleEntry(entries.first());
-
-    return entry.getValue();
   }
 
   @Override
