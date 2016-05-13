@@ -1065,8 +1065,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     writeLock.lock();
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
-      entry.expirationNanos.set(TimeUnit.NANOSECONDS.convert(duration, timeUnit));
-      resetEntry(entry, true);
+      if (entry != null) {
+        entry.expirationNanos.set(TimeUnit.NANOSECONDS.convert(duration, timeUnit));
+        resetEntry(entry, true);
+      }
     } finally {
       writeLock.unlock();
     }

@@ -1,3 +1,9 @@
+# 0.5.6
+
+### Bug Fixes
+
+* Fixed #31 - `setExpiration(K, long, TimeUnit)` throws NPE for non-existent keys
+
 # 0.5.5
 
 ### Bug Fixes
