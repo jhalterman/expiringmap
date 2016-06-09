@@ -90,6 +90,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   /** Guarded by "readWriteLock" */
   private final EntryMap<K, V> entries;
   private final boolean variableExpiration;
+  private final Ticker ticker;
 
   /**
    * Sets the {@link ThreadFactory} that is used to create expiration and listener callback threads for all ExpiringMap
@@ -136,6 +137,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     expirationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
     entryLoader = builder.entryLoader;
     expiringEntryLoader = builder.expiringEntryLoader;
+    ticker = builder.ticker;
   }
 
   /**
@@ -150,6 +152,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     private long duration = 60;
     private EntryLoader<K, V> entryLoader;
     private ExpiringEntryLoader<K, V> expiringEntryLoader;
+    private Ticker ticker = Ticker.systemTicker();
 
     /**
      * Creates a new Builder object.
@@ -297,6 +300,20 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      */
     public Builder<K, V> variableExpiration() {
       variableExpiration = true;
+      return this;
+    }
+
+    /**
+     * Configures a nanosecond-precision time source for this cache. By default {@link System#nanoTime()} is used
+     *
+     * <p>Primary intent is to facilitate testing with a fake or mock time source</p>
+     *
+     * @param ticker
+     * @throws NullPointerException if {@code ticker} is null
+     */
+    public Builder<K, V> ticker(Ticker ticker){
+      Assert.notNull(ticker, "ticker");
+      this.ticker = ticker;
       return this;
     }
 
@@ -491,6 +508,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     final AtomicLong expectedExpiration;
     final AtomicReference<ExpirationPolicy> expirationPolicy;
     final K key;
+    final Ticker ticker;
     /** Guarded by "this" */
     volatile Future<?> entryFuture;
     /** Guarded by "this" */
@@ -505,13 +523,15 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * @param value for the entry
      * @param expirationPolicy for the entry
      * @param expirationNanos for the entry
+     * @param ticker for the entry
      */
-    ExpiringEntry(K key, V value, AtomicReference<ExpirationPolicy> expirationPolicy, AtomicLong expirationNanos) {
+    ExpiringEntry(K key, V value, AtomicReference<ExpirationPolicy> expirationPolicy, AtomicLong expirationNanos, Ticker ticker) {
       this.key = key;
       this.value = value;
       this.expirationPolicy = expirationPolicy;
       this.expirationNanos = expirationNanos;
       this.expectedExpiration = new AtomicLong();
+      this.ticker = ticker;
       resetExpiration();
     }
 
@@ -581,7 +601,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
     /** Resets the entry's expected expiration. */
     void resetExpiration() {
-      expectedExpiration.set(expirationNanos.get() + System.nanoTime());
+      expectedExpiration.set(expirationNanos.get() + ticker.time());
     }
 
     /** Marks the entry as scheduled. */
@@ -808,7 +828,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     Assert.notNull(key, "key");
     ExpiringEntry<K, V> entry = getEntry(key);
     Assert.element(entry, key);
-    return TimeUnit.NANOSECONDS.toMillis(entry.expectedExpiration.get() - System.nanoTime());
+    return TimeUnit.NANOSECONDS.toMillis(entry.expectedExpiration.get() - ticker.time());
   }
 
   @Override
@@ -1214,7 +1234,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       if (entry == null) {
         entry = new ExpiringEntry<K, V>(key, value,
             variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy) : this.expirationPolicy,
-            variableExpiration ? new AtomicLong(expirationNanos) : this.expirationNanos);
+            variableExpiration ? new AtomicLong(expirationNanos) : this.expirationNanos,
+            this.ticker);
         entries.put(key, entry);
         if (entries.size() == 1 || entries.first().equals(entry))
           scheduleEntry(entry);
@@ -1290,7 +1311,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
               while (iterator.hasNext() && schedulePending) {
                 ExpiringEntry<K, V> nextEntry = iterator.next();
-                if (nextEntry.expectedExpiration.get() <= System.nanoTime()) {
+                if (nextEntry.expectedExpiration.get() <= ticker.time()) {
                   iterator.remove();
                   notifyListeners(nextEntry);
                 } else {
@@ -1306,7 +1327,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         }
       };
 
-      Future<?> entryFuture = EXPIRER.schedule(runnable, entry.expectedExpiration.get() - System.nanoTime(),
+      Future<?> entryFuture = EXPIRER.schedule(runnable, entry.expectedExpiration.get() - ticker.time(),
           TimeUnit.NANOSECONDS);
       entry.schedule(entryFuture);
     }
