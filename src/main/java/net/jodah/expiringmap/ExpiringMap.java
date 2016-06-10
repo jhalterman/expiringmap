@@ -684,6 +684,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public boolean containsValue(Object value) {
+    expireEntries();
     readLock.lock();
     try {
       return entries.containsValue(value);
@@ -710,6 +711,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
       @Override
       public Iterator<Map.Entry<K, V>> iterator() {
+        expireEntries();
         return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new EntryIterator()
             : ((EntryTreeHashMap<K, V>) entries).new EntryIterator();
       }
@@ -834,6 +836,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public int hashCode() {
+    expireEntries();
     readLock.lock();
     try {
       return entries.hashCode();
@@ -868,6 +871,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
       @Override
       public Iterator<K> iterator() {
+        expireEntries();
         return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new KeyIterator()
             : ((EntryTreeHashMap<K, V>) entries).new KeyIterator();
       }
@@ -952,6 +956,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     Assert.notNull(key, "key");
     writeLock.lock();
     try {
+      expireEntriesInternal();
       if (!entries.containsKey(key))
         return putInternal(key, value, expirationPolicy.get(), expirationNanos.get());
       else
@@ -982,6 +987,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     Assert.notNull(key, "key");
     writeLock.lock();
     try {
+      expireEntriesInternal();
       ExpiringEntry<K, V> entry = entries.get(key);
       if (entry != null && entry.getValue().equals(value)) {
         entries.remove(key);
@@ -1000,6 +1006,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     Assert.notNull(key, "key");
     writeLock.lock();
     try {
+      expireEntriesInternal();
       if (entries.containsKey(key)) {
         return putInternal(key, value, expirationPolicy.get(), expirationNanos.get());
       } else
@@ -1014,6 +1021,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     Assert.notNull(key, "key");
     writeLock.lock();
     try {
+      expireEntriesInternal();
       ExpiringEntry<K, V> entry = entries.get(key);
       if (entry != null && entry.getValue().equals(oldValue)) {
         putInternal(key, newValue, expirationPolicy.get(), expirationNanos.get());
@@ -1086,6 +1094,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     Assert.operation(variableExpiration, "Variable expiration is not enabled");
     writeLock.lock();
     try {
+      expireEntriesInternal();
       ExpiringEntry<K, V> entry = entries.get(key);
       if (entry != null) {
         entry.expirationNanos.set(TimeUnit.NANOSECONDS.convert(duration, timeUnit));
@@ -1140,6 +1149,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public int size() {
+    expireEntries();
     readLock.lock();
     try {
       return entries.size();
@@ -1150,6 +1160,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public String toString() {
+    expireEntries();
     readLock.lock();
     try {
       return entries.toString();
@@ -1173,6 +1184,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
       @Override
       public Iterator<V> iterator() {
+        expireEntries();
         return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new ValueIterator()
             : ((EntryTreeHashMap<K, V>) entries).new ValueIterator();
       }
@@ -1237,6 +1249,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   V putInternal(K key, V value, ExpirationPolicy expirationPolicy, long expirationNanos) {
     writeLock.lock();
     try {
+      expireEntriesInternal();
       ExpiringEntry<K, V> entry = entries.get(key);
       V oldValue = null;
 
