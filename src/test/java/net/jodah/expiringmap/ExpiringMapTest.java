@@ -1,23 +1,13 @@
 package net.jodah.expiringmap;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertTrue;
-
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
+
+import static org.testng.Assert.*;
 
 /**
  * Tests {@link ExpiringMap}.
@@ -134,7 +124,10 @@ public class ExpiringMapTest {
   public void testGetExpectedExpiration() throws Exception {
     // Given
     CustomValueTicker ticker = new CustomValueTicker();
-    ExpiringMap<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).ticker(ticker).build();
+    ExpiringMap<String, Integer> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
 
     // When / Then
     map.put("foo", 1);
@@ -210,7 +203,10 @@ public class ExpiringMapTest {
   public void testPutWithSameKey() throws Throwable {
     // Given
     CustomValueTicker ticker = new CustomValueTicker();
-    ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).ticker(ticker).build();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
 
     // When
     map.put("John", "Doe");
@@ -420,7 +416,10 @@ public class ExpiringMapTest {
 
     ExpiringMap.setThreadFactory(Executors.defaultThreadFactory());
     CustomValueTicker ticker = new CustomValueTicker();
-    ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).ticker(ticker).build();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
 
     map.put("foo", "bar");
     ticker.setValue(150);
@@ -457,4 +456,228 @@ public class ExpiringMapTest {
     map.put("c", "c");
     valuesIterator.next();
   }
+
+  @Test
+  public void testValuesCollectionMethods() {
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
+    map.put("a", "a1");
+    map.put("b", "b1");
+
+    Collection<String> values = map.values();
+    assertEquals(values.size(), 2);
+    assertEqualsNoOrder(values.toArray(new Object[2]), new Object[]{"a1", "b1"});
+
+    ticker.setValue(110);
+    assertFalse(values.iterator().hasNext());
+    assertEquals(values.size(), 0);
+  }
+
+  @Test
+  public void testKeySetMethods() {
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
+    map.put("a", "a1");
+    map.put("b", "b1");
+
+    Set<String> keySet = map.keySet();
+    assertEquals(keySet.size(), 2);
+    assertEqualsNoOrder(keySet.toArray(new Object[2]), new Object[]{"a", "b"});
+
+    ticker.setValue(110);
+    assertFalse(keySet.iterator().hasNext());
+    assertEquals(keySet.size(), 0);
+  }
+
+  @Test
+  public void testKeyEntrySetMethods() {
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
+    map.put("a", "a1");
+    map.put("b", "b1");
+
+    Set<Map.Entry<String, String>> entrySet = map.entrySet();
+    assertEquals(entrySet.size(), 2);
+
+    ticker.setValue(110);
+    assertFalse(entrySet.iterator().hasNext());
+    assertEquals(entrySet.size(), 0);
+  }
+
+  @Test
+  public void testSettingExpirationPerEntry() {
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .variableExpiration()
+            .ticker(ticker)
+            .build();
+    map.put("a", "a");
+    map.put("b", "b");
+
+    ticker.setValue(60);
+    map.setExpiration("a", 200, TimeUnit.MILLISECONDS);
+    assertTrue(map.getExpectedExpiration("a") > 150);
+    assertTrue(map.getExpectedExpiration("b") < 50);
+
+    ticker.setValue(250);
+    map.setExpiration("b", 200, TimeUnit.MILLISECONDS);
+    assertTrue(map.getExpectedExpiration("a") < 100);
+    assertFalse(map.containsKey("b"));
+  }
+
+  @Test
+  public void testResettingExpirationPerEntry(){
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .variableExpiration()
+            .ticker(ticker)
+            .build();
+    map.put("a", "a");
+    map.put("b", "b");
+
+    ticker.setValue(60);
+    map.resetExpiration("a");
+    assertTrue(map.getExpectedExpiration("a") > 90);
+    assertTrue(map.getExpectedExpiration("b") < 50);
+
+    ticker.setValue(120);
+    map.resetExpiration("b");
+    assertTrue(map.getExpectedExpiration("a") < 50);
+    assertFalse(map.containsKey("b"));
+  }
+
+  @Test
+  public void testReplacingWithOldValues(){
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
+    map.put("a", "a");
+    map.put("b", "b");
+
+    ticker.setValue(50);
+    assertTrue(map.replace("a", "a", "a1"));
+    assertFalse(map.replace("b", "b1", "b2"));
+    assertEquals(map.get("a"), "a1");
+    assertEquals(map.get("b"), "b");
+
+    ticker.setValue(140);
+    assertFalse(map.replace("b", "b", "b1"));
+    assertEquals(map.get("a"), "a1");
+    assertNull(map.get("b"));
+  }
+
+  @Test
+  public void testReplacingValues(){
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
+    map.put("a", "a");
+    map.put("b", "b");
+
+    ticker.setValue(50);
+    assertEquals(map.replace("a", "a1"), "a");
+    assertEquals(map.get("a"), "a1");
+
+    ticker.setValue(140);
+    assertNull(map.replace("b", "b1"));
+    assertEquals(map.get("a"), "a1");
+    assertNull(map.get("b"));
+  }
+
+  @Test
+  public void testRemovingWithOldValues(){
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
+    map.put("a", "a");
+    map.put("b", "b");
+
+    ticker.setValue(50);
+    assertTrue(map.remove("a", "a"));
+    assertFalse(map.remove("b", "b1"));
+    assertEquals(map.get("b"), "b");
+
+    ticker.setValue(110);
+    assertFalse(map.remove("b", "b"));
+  }
+
+  @Test
+  public void testPutIfAbsent(){
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
+    map.put("a", "a");
+
+    ticker.setValue(50);
+    assertEquals(map.putIfAbsent("a", "b"), "a");
+    assertEquals(map.get("a"), "a");
+
+    ticker.setValue(110);
+    assertNull(map.putIfAbsent("a", "b"));
+    assertEquals(map.get("a"), "b");
+  }
+
+  @Test
+  public void testPutAllToEmptyMap(){
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
+    Map<String, String> putMap = new HashMap<>();
+    putMap.put("a", "a");
+    putMap.put("b", "b");
+
+    map.putAll(putMap);
+    assertEquals(map.size(), 2);
+    assertEquals(map.get("a"), "a");
+    assertEquals(map.get("b"), "b");
+  }
+
+  @Test
+  public void testPutAllToNonEmptyMap(){
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .ticker(ticker)
+            .build();
+    map.put("a", "a1");
+    map.put("b", "b");
+
+    Map<String, String> putMap = new HashMap<>();
+    putMap.put("a", "a");
+    putMap.put("b", "b");
+    putMap.put("c", "c");
+
+    ticker.setValue(50);
+    map.putAll(putMap);
+    assertEquals(map.size(), 3);
+    assertEquals(map.get("a"), "a");
+    assertEquals(map.get("b"), "b");
+    assertEquals(map.get("c"), "c");
+
+    ticker.setValue(110);
+    assertEquals(map.size(), 2);
+    assertNull(map.get("b"));
+  }
 }
+
