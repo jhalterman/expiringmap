@@ -673,6 +673,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public boolean containsKey(Object key) {
+    expireEntries();
     readLock.lock();
     try {
       return entries.containsKey(key);
@@ -843,6 +844,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public boolean isEmpty() {
+    expireEntries();
     readLock.lock();
     try {
       return entries.isEmpty();
@@ -1214,10 +1216,17 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    */
   ExpiringEntry<K, V> getEntry(Object key) {
     readLock.lock();
+    ExpiringEntry<K, V> entry = null;
     try {
-      return entries.get(key);
+      entry = entries.get(key);
     } finally {
       readLock.unlock();
+    }
+    if (entry != null && entry.expectedExpiration.get() <= ticker.time()) {
+      expireEntryIfNeeded(new WeakReference<>(entry), false);
+      return null;
+    } else {
+      return entry;
     }
   }
 
@@ -1292,44 +1301,73 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         return;
 
       final WeakReference<ExpiringEntry<K, V>> entryReference = new WeakReference<ExpiringEntry<K, V>>(entry);
-      runnable = new Runnable() {
-        @Override
-        public void run() {
-          ExpiringEntry<K, V> entry = entryReference.get();
-
-          writeLock.lock();
-          try {
-            if (entry != null && entry.scheduled) {
-              entries.remove(entry.key);
-              notifyListeners(entry);
-            }
-
-            try {
-              // Expires entries and schedules the next entry
-              Iterator<ExpiringEntry<K, V>> iterator = entries.valuesIterator();
-              boolean schedulePending = true;
-
-              while (iterator.hasNext() && schedulePending) {
-                ExpiringEntry<K, V> nextEntry = iterator.next();
-                if (nextEntry.expectedExpiration.get() <= ticker.time()) {
-                  iterator.remove();
-                  notifyListeners(nextEntry);
-                } else {
-                  scheduleEntry(nextEntry);
-                  schedulePending = false;
-                }
-              }
-            } catch (NoSuchElementException ignored) {
-            }
-          } finally {
-            writeLock.unlock();
-          }
-        }
-      };
+      runnable = () -> expireEntryIfNeeded(entryReference, true);
 
       Future<?> entryFuture = EXPIRER.schedule(runnable, entry.expectedExpiration.get() - ticker.time(),
           TimeUnit.NANOSECONDS);
       entry.schedule(entryFuture);
+    }
+  }
+
+  private void expireEntryIfNeeded(WeakReference<ExpiringEntry<K, V>> entryReference, boolean rescheduleNeeded) {
+    ExpiringEntry<K, V> entry = entryReference.get();
+
+    writeLock.lock();
+    try {
+      if (entry != null && entry.scheduled) {
+        if (entry.expectedExpiration.get() <= ticker.time()) {
+          entries.remove(entry.key);
+          notifyListeners(entry);
+        } else {
+          if (rescheduleNeeded) {
+            Runnable runnable = () -> expireEntryIfNeeded(entryReference, rescheduleNeeded);
+            Future<?> entryFuture = EXPIRER.schedule(runnable, entry.expectedExpiration.get() - ticker.time(),
+                    TimeUnit.NANOSECONDS);
+            entry.schedule(entryFuture);
+          }
+          return;
+        }
+      }
+
+      expireEntriesInternal();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  /**
+   * Expire entries by time if needed.
+   */
+  private void expireEntries(){
+    writeLock.lock();
+    try {
+      expireEntriesInternal();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  /**
+   * Expire entries by time if needed - do not use with prior obtaining write lock.
+   * This method assumes write lock is obtained.
+   */
+  private void expireEntriesInternal() {
+    try {
+      // Expires entries and schedules the next entry
+      Iterator<ExpiringEntry<K, V>> iterator = entries.valuesIterator();
+      boolean schedulePending = true;
+
+      while (iterator.hasNext() && schedulePending) {
+        ExpiringEntry<K, V> nextEntry = iterator.next();
+        if (nextEntry.expectedExpiration.get() <= ticker.time()) {
+          iterator.remove();
+          notifyListeners(nextEntry);
+        } else {
+          scheduleEntry(nextEntry);
+          schedulePending = false;
+        }
+      }
+    } catch (NoSuchElementException ignored) {
     }
   }
 

@@ -24,7 +24,7 @@ public class ExpiringEntryTest {
   public void testEntryOrdering() {
     AtomicReference<ExpirationPolicy> expirationPolicy = new AtomicReference<ExpirationPolicy>(ExpirationPolicy.CREATED);
     NavigableSet<ExpiringEntry<String, String>> set = new TreeSet<ExpiringEntry<String, String>>();
-    Ticker ticker = new FixedTicker();
+    Ticker ticker = new CustomValueTicker();
     ExpiringEntry<String, String> entry1 = new ExpiringEntry<String, String>("a", "a", expirationPolicy,
       new AtomicLong(1000000), ticker);
     ExpiringEntry<String, String> entry2 = new ExpiringEntry<String, String>("b", "b", expirationPolicy,
@@ -54,7 +54,7 @@ public class ExpiringEntryTest {
   public void testEntryReplaceSameKey() {
     AtomicReference<ExpirationPolicy> expirationPolicy = new AtomicReference<ExpirationPolicy>(ExpirationPolicy.CREATED);
     Set<ExpiringEntry<String, String>> set = new TreeSet<ExpiringEntry<String, String>>();
-    Ticker ticker = new FixedTicker();
+    Ticker ticker = new CustomValueTicker();
     ExpiringEntry<String, String> entry1 = new ExpiringEntry<String, String>("a", "a", expirationPolicy,
       new AtomicLong(1000), ticker);
     ExpiringEntry<String, String> entry2 = new ExpiringEntry<String, String>("a", "a", expirationPolicy,
@@ -65,11 +65,4 @@ public class ExpiringEntryTest {
     assertFalse(set.add(entry2));
     assertFalse(set.add(entry3));
   }
-
-  private static class FixedTicker extends Ticker {
-    @Override
-    public long time() {
-      return 0;
-    }
-  };
 }

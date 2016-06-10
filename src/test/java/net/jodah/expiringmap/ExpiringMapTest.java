@@ -133,11 +133,12 @@ public class ExpiringMapTest {
    */
   public void testGetExpectedExpiration() throws Exception {
     // Given
-    ExpiringMap<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).ticker(ticker).build();
 
     // When / Then
     map.put("foo", 1);
-    Thread.sleep(55);
+    ticker.setValue(55);
     assertTrue(map.getExpectedExpiration("foo") < 50);
     map.put("foo", 2);
     assertTrue(map.getExpectedExpiration("foo") > 50);
@@ -147,7 +148,8 @@ public class ExpiringMapTest {
    * Tests {@link ExpiringMap#put(Object, Object)} and {@link ExpiringMap#get(Object)}.
    */
   public void testPutAndGet() throws Exception {
-    Map<Integer, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
+    CustomValueTicker ticker = new CustomValueTicker();
+    Map<Integer, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).ticker(ticker).build();
 
     for (int i = 0; i < 10; i++)
       map.put(i, i);
@@ -155,6 +157,31 @@ public class ExpiringMapTest {
     for (int i = 0; i < 10; i++)
       assertEquals(Integer.valueOf(i), map.get(i));
 
+    ticker.setValue(150);
+
+    for (int i = 0; i < 10; i++)
+      assertEquals(null, map.get(i));
+  }
+
+  /**
+   * Tests {@link ExpiringMap#put(Object, Object)} and {@link ExpiringMap#get(Object)}.
+   */
+  public void testPutAndGetWithThreadSleepAndCustomTicker() throws Exception {
+    CustomValueTicker ticker = new CustomValueTicker();
+    Map<Integer, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).ticker(ticker).build();
+
+    for (int i = 0; i < 10; i++)
+      map.put(i, i);
+
+    for (int i = 0; i < 10; i++)
+      assertEquals(Integer.valueOf(i), map.get(i));
+
+    Thread.sleep(150);
+
+    for (int i = 0; i < 10; i++)
+      assertEquals(Integer.valueOf(i), map.get(i));
+
+    ticker.setValue(150);
     Thread.sleep(150);
 
     for (int i = 0; i < 10; i++)
@@ -182,15 +209,16 @@ public class ExpiringMapTest {
    */
   public void testPutWithSameKey() throws Throwable {
     // Given
-    ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).ticker(ticker).build();
 
     // When
     map.put("John", "Doe");
-    Thread.sleep(50);
+    ticker.setValue(50);
     map.put("John", "Moe");
-    Thread.sleep(60);
+    ticker.setValue(110);
     assertEquals(map.get("John"), "Moe");
-    Thread.sleep(50);
+    ticker.setValue(160);
 
     // Then
     assertTrue(map.isEmpty());
@@ -201,13 +229,14 @@ public class ExpiringMapTest {
    */
   public void testPutWithSameValue() throws Exception {
     // Given
-    Map<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).build();
+    CustomValueTicker ticker = new CustomValueTicker();
+    Map<String, Integer> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).ticker(ticker).build();
 
     // When
     map.put("foo", 1);
-    Thread.sleep(55);
+    ticker.setValue(55);
     map.put("foo", 1);
-    Thread.sleep(55);
+    ticker.setValue(110);
 
     // Then
     assertNull(map.get("foo"));
@@ -275,13 +304,14 @@ public class ExpiringMapTest {
    * Tests that {@link ExpiringMap#setExpiration(Object, long, TimeUnit)} works as expected.
    */
   public void testSetEntryExpiration() throws Exception {
-    ExpiringMap<String, String> map = ExpiringMap.builder().variableExpiration().build();
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder().variableExpiration().ticker(ticker).build();
     map.put("a", "a");
     map.put("b", "b");
     map.put("c", "c");
     map.put("d", "d");
     map.setExpiration("c", 100, TimeUnit.MILLISECONDS);
-    Thread.sleep(120);
+    ticker.setValue(120);
     assertTrue(map.containsKey("a"));
     assertTrue(map.containsKey("b"));
     assertFalse(map.containsKey("c"));
@@ -292,16 +322,18 @@ public class ExpiringMapTest {
    * Tests that {@link ExpiringMap#setExpirationPolicy(Object, ExpirationPolicy) works as expected.
    */
   public void testSetEntryExpirationPolicy() throws Exception {
+    CustomValueTicker ticker = new CustomValueTicker();
     ExpiringMap<String, String> map = ExpiringMap.builder()
         .variableExpiration()
         .expiration(100, TimeUnit.MILLISECONDS)
+        .ticker(ticker)
         .build();
     map.put("a", "a");
     map.put("b", "b");
     map.put("c", "c");
     map.get("a");
     map.get("c");
-    Thread.sleep(110);
+    ticker.setValue(110);
     assertFalse(map.containsKey("a"));
     assertFalse(map.containsKey("b"));
     assertFalse(map.containsKey("c"));
@@ -309,13 +341,13 @@ public class ExpiringMapTest {
     map.put("b", "b");
     map.put("c", "c");
     map.setExpirationPolicy("b", ExpirationPolicy.ACCESSED);
-    Thread.sleep(50);
+    ticker.setValue(160);
     map.get("b");
-    Thread.sleep(60);
+    ticker.setValue(220);
     assertFalse(map.containsKey("a"));
     assertTrue(map.containsKey("b"));
     assertFalse(map.containsKey("c"));
-    Thread.sleep(50);
+    ticker.setValue(270);
     assertTrue(map.isEmpty());
   }
 
@@ -323,18 +355,20 @@ public class ExpiringMapTest {
    * Tests that {@link ExpiringMap#setExpiration(long, TimeUnit)} works as expected.
    */
   public void testSetExpiration() throws Exception {
+    CustomValueTicker ticker = new CustomValueTicker();
     ExpiringMap<String, String> map = ExpiringMap.builder()
         .variableExpiration()
         .expiration(100, TimeUnit.MILLISECONDS)
+        .ticker(ticker)
         .build();
     map.put("a", "a");
-    Thread.sleep(150);
+    ticker.setValue(150);
     assertTrue(map.isEmpty());
     map.setExpiration(500, TimeUnit.MILLISECONDS);
     map.put("a", "a");
-    Thread.sleep(200);
+    ticker.setValue(350);
     assertTrue(map.containsKey("a"));
-    Thread.sleep(350);
+    ticker.setValue(700);
     assertTrue(map.isEmpty());
   }
 
@@ -342,26 +376,28 @@ public class ExpiringMapTest {
    * Tests that {@link ExpiringMap#setExpirationPolicy(ExpirationPolicy) works as expected.
    */
   public void testSetExpirationPolicy() throws Exception {
+    CustomValueTicker ticker = new CustomValueTicker();
     ExpiringMap<String, String> map = ExpiringMap.builder()
         .variableExpiration()
         .expiration(100, TimeUnit.MILLISECONDS)
+        .ticker(ticker)
         .build();
     map.put("a", "a");
     map.put("b", "b");
     map.put("c", "c");
-    Thread.sleep(50);
+    ticker.setValue(50);
     map.setExpirationPolicy(ExpirationPolicy.ACCESSED);
     map.put("d", "d");
-    Thread.sleep(50);
+    ticker.setValue(100);
     map.get("d");
-    Thread.sleep(50);
+    ticker.setValue(150);
     map.get("d");
-    Thread.sleep(50);
+    ticker.setValue(200);
     assertFalse(map.containsKey("a"));
     assertFalse(map.containsKey("b"));
     assertFalse(map.containsKey("c"));
     assertTrue(map.containsKey("d"));
-    Thread.sleep(60);
+    ticker.setValue(260);
     assertTrue(map.isEmpty());
   }
 
@@ -374,6 +410,20 @@ public class ExpiringMapTest {
 
     map.put("foo", "bar");
 
+    Thread.sleep(150);
+    assertTrue(map.isEmpty());
+  }
+
+  public void testSetThreadFactoryWithCustomTicker() throws Throwable {
+    ExpiringMap.EXPIRER = null;
+    ExpiringMap.LISTENER_SERVICE = null;
+
+    ExpiringMap.setThreadFactory(Executors.defaultThreadFactory());
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, String> map = ExpiringMap.builder().expiration(100, TimeUnit.MILLISECONDS).ticker(ticker).build();
+
+    map.put("foo", "bar");
+    ticker.setValue(150);
     Thread.sleep(150);
     assertTrue(map.isEmpty());
   }
