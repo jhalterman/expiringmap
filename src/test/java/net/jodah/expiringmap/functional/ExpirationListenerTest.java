@@ -1,15 +1,13 @@
 package net.jodah.expiringmap.functional;
 
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
+import net.jodah.concurrentunit.Waiter;
 import net.jodah.expiringmap.CustomValueTicker;
-import net.jodah.expiringmap.internal.Assert;
+import net.jodah.expiringmap.ExpiringMap;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import net.jodah.concurrentunit.Waiter;
-import net.jodah.expiringmap.ExpiringMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.testng.Assert.assertTrue;
 
