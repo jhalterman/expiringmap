@@ -3,6 +3,7 @@ package net.jodah.expiringmap;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -678,6 +679,53 @@ public class ExpiringMapTest {
     ticker.setValue(110);
     assertEquals(map.size(), 2);
     assertNull(map.get("b"));
+  }
+
+  @Test
+  public void testEntryLoader(){
+    final AtomicInteger counter = new AtomicInteger(0);
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, Integer> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .entryLoader(key -> counter.incrementAndGet())
+            .ticker(ticker)
+            .build();
+
+    map.put("b", -5);
+
+    assertEquals(map.get("a"), new Integer(1));
+    assertEquals(map.get("b"), new Integer(-5));
+
+    ticker.setValue(60);
+    map.resetExpiration("a");
+
+    ticker.setValue(110);
+    assertEquals(map.get("a"), new Integer(1));
+    assertEquals(map.get("b"), new Integer(2));
+  }
+
+  @Test
+  public void testExpiringEntryLoader(){
+    final AtomicInteger counter = new AtomicInteger(0);
+    CustomValueTicker ticker = new CustomValueTicker();
+    ExpiringMap<String, Integer> map = ExpiringMap.builder()
+            .expiration(100, TimeUnit.MILLISECONDS)
+            .expiringEntryLoader(key -> new ExpiringValue<>(counter.incrementAndGet(), 200, TimeUnit.MILLISECONDS))
+            .ticker(ticker)
+            .build();
+
+    map.put("b", -5);
+
+    assertEquals(map.get("a"), new Integer(1));
+    assertEquals(map.get("b"), new Integer(-5));
+
+    ticker.setValue(110);
+    assertEquals(map.get("a"), new Integer(1));
+    assertEquals(map.get("b"), new Integer(2));
+
+    ticker.setValue(210);
+    assertEquals(map.get("a"), new Integer(3));
+    assertEquals(map.get("b"), new Integer(2));
   }
 }
 

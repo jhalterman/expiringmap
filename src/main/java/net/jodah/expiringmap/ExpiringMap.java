@@ -1235,7 +1235,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       readLock.unlock();
     }
     if (entry != null && entry.expectedExpiration.get() <= ticker.time()) {
-      expireEntryIfNeeded(new WeakReference<>(entry), false);
+      expireEntryIfNeeded(new WeakReference<ExpiringEntry<K, V>>(entry), false);
       return null;
     } else {
       return entry;
@@ -1314,7 +1314,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         return;
 
       final WeakReference<ExpiringEntry<K, V>> entryReference = new WeakReference<ExpiringEntry<K, V>>(entry);
-      runnable = () -> expireEntryIfNeeded(entryReference, true);
+      runnable = new Runnable() {
+        @Override
+        public void run() {
+          expireEntryIfNeeded(entryReference, true);
+        }
+      };
 
       Future<?> entryFuture = EXPIRER.schedule(runnable, entry.expectedExpiration.get() - ticker.time(),
           TimeUnit.NANOSECONDS);
@@ -1322,7 +1327,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  private void expireEntryIfNeeded(WeakReference<ExpiringEntry<K, V>> entryReference, boolean rescheduleNeeded) {
+  private void expireEntryIfNeeded(final WeakReference<ExpiringEntry<K, V>> entryReference,final boolean rescheduleNeeded) {
     ExpiringEntry<K, V> entry = entryReference.get();
 
     writeLock.lock();
@@ -1333,7 +1338,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
           notifyListeners(entry);
         } else {
           if (rescheduleNeeded) {
-            Runnable runnable = () -> expireEntryIfNeeded(entryReference, rescheduleNeeded);
+            Runnable runnable = new Runnable() {
+              @Override
+              public void run() {
+                expireEntryIfNeeded(entryReference, rescheduleNeeded);
+              }
+            };
             Future<?> entryFuture = EXPIRER.schedule(runnable, entry.expectedExpiration.get() - ticker.time(),
                     TimeUnit.NANOSECONDS);
             entry.schedule(entryFuture);
