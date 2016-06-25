@@ -3,6 +3,7 @@
 ### Bug Fixes
 
 * Fixed #31 - `setExpiration(K, long, TimeUnit)` throws NPE for non-existent keys
+* Fixed #33 - Entry loader may be called twice for same key under heavy load
 
 # 0.5.5
 
