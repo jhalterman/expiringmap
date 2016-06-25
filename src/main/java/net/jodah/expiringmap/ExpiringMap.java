@@ -720,13 +720,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public V get(Object key) {
     ExpiringEntry<K, V> entry = getEntry(key);
 
     if (entry == null) {
-      @SuppressWarnings("unchecked")
-      K typedKey = (K) key;
-      return load(typedKey);
+      return load((K) key);
     } else if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
       resetEntry(entry, false);
 
@@ -734,25 +733,35 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   private V load(K key) {
-    if (entryLoader == null && expiringEntryLoader == null) {
+    if (entryLoader == null && expiringEntryLoader == null)
       return null;
-    } else if (entryLoader != null) {
-      V value = entryLoader.load(key);
-      put(key, value);
-      return value;
-    } else {
-      ExpiringValue<? extends V> expiringValue = expiringEntryLoader.load(key);
-      if (expiringValue == null) {
-        put(key, null);
-        return null;
+
+    writeLock.lock();
+    try {
+      // Double check for entry
+      ExpiringEntry<K, V> entry = getEntry(key);
+      if (entry != null)
+        return entry.getValue();
+
+      if (entryLoader != null) {
+        V value = entryLoader.load(key);
+        put(key, value);
+        return value;
       } else {
-        long duration = expiringValue.getTimeUnit() == null ? expirationNanos.get() : expiringValue.getDuration();
-        TimeUnit timeUnit = expiringValue.getTimeUnit() == null ? TimeUnit.NANOSECONDS : expiringValue.getTimeUnit();
-        put(key, expiringValue.getValue(),
-            expiringValue.getExpirationPolicy() == null ? expirationPolicy.get() : expiringValue.getExpirationPolicy(),
-            duration, timeUnit);
-        return expiringValue.getValue();
+        ExpiringValue<? extends V> expiringValue = expiringEntryLoader.load(key);
+        if (expiringValue == null) {
+          put(key, null);
+          return null;
+        } else {
+          long duration = expiringValue.getTimeUnit() == null ? expirationNanos.get() : expiringValue.getDuration();
+          TimeUnit timeUnit = expiringValue.getTimeUnit() == null ? TimeUnit.NANOSECONDS : expiringValue.getTimeUnit();
+          put(key, expiringValue.getValue(), expiringValue.getExpirationPolicy() == null ? expirationPolicy.get()
+              : expiringValue.getExpirationPolicy(), duration, timeUnit);
+          return expiringValue.getValue();
+        }
       }
+    } finally {
+      writeLock.unlock();
     }
   }
 
