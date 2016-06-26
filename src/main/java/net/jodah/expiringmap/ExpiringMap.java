@@ -109,7 +109,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    */
   private ExpiringMap(final Builder<K, V> builder) {
     if (EXPIRER == null) {
-      synchronized (this) {
+      synchronized (ExpiringMap.class) {
         if (EXPIRER == null) {
           EXPIRER = Executors.newSingleThreadScheduledExecutor(
               THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Expirer") : THREAD_FACTORY);
@@ -118,7 +118,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     if (LISTENER_SERVICE == null && builder.asyncExpirationListeners != null) {
-      synchronized (this) {
+      synchronized (ExpiringMap.class) {
         if (LISTENER_SERVICE == null) {
           LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
               THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
