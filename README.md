@@ -154,9 +154,10 @@ ExpiringMap.create();
 
 See the [GAE docs on threads](https://cloud.google.com/appengine/docs/java/runtime#threads) for more info.
 
-## Docs
+## Additional Resources
 
-JavaDocs are available [here](https://jhalterman.github.com/expiringmap/javadoc).
+* [Javadocs](https://jhalterman.github.com/expiringmap/javadoc)
+* [Who's Using ExpiringMap](https://github.com/jhalterman/expiringmap/wiki/Who's-Using-ExpiringMap)
 
 ## License
 
