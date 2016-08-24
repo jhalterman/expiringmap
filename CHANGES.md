@@ -1,3 +1,9 @@
+# 0.5.7
+
+### Bug Fixes
+
+* Fixed #36 - Entry/value iterators may show duplicates when variable expiration enabled.
+
 # 0.5.6
 
 ### Bug Fixes

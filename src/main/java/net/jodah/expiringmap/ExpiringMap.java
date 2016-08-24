@@ -39,7 +39,7 @@ import net.jodah.expiringmap.internal.NamedThreadFactory;
  * Entries are tracked by expiration time and expired by a single thread.
  * 
  * <p>
- * Expiration listeners are called synchronously as entries are expires and block write operations to the map until they
+ * Expiration listeners are called synchronously as entries are expired and block write operations to the map until they
  * completed. Asynchronous expiration listeners are called on a separate thread pool and do not block map operations.
  * 
  * <p>
@@ -215,6 +215,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
     /**
      * Configures the expiration listener that will receive notifications upon each map entry's expiration.
+     * Notifications are delivered synchronously and block map write operations.
      * 
      * @param listener to set
      * @throws NullPointerException if {@code listener} is null
@@ -231,6 +232,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
     /**
      * Configures the expiration listeners which will receive notifications upon each map entry's expiration.
+     * Notifications are delivered synchronously and block map write operations.
      * 
      * @param listeners to set
      * @throws NullPointerException if {@code listener} is null
@@ -323,7 +325,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Entry LinkedHashMap implementation. */
-  private static class EntryLinkedHashMap<K, V> extends LinkedHashMap<K, ExpiringEntry<K, V>>implements EntryMap<K, V> {
+  private static class EntryLinkedHashMap<K, V> extends LinkedHashMap<K, ExpiringEntry<K, V>>
+      implements EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
 
     @Override
@@ -344,6 +347,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     @Override
     public void reorder(ExpiringEntry<K, V> value) {
       remove(value.key);
+      value.resetExpiration();
       put(value.key, value);
     }
 
@@ -390,7 +394,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /** Entry TreeHashMap implementation for variable expiration ExpiringMap entries. */
-  private static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>>implements EntryMap<K, V> {
+  private static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>> implements EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
     SortedSet<ExpiringEntry<K, V>> sortedSet = new TreeSet<ExpiringEntry<K, V>>();
 
@@ -432,6 +436,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     @Override
     public void reorder(ExpiringEntry<K, V> value) {
       sortedSet.remove(value);
+      value.resetExpiration();
       sortedSet.add(value);
     }
 
@@ -556,21 +561,17 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     /**
-     * Marks the entry as canceled and resets the expiration if {@code resetExpiration} is true.
+     * Marks the entry as canceled.
      * 
-     * @param resetExpiration whether the entry's expiration should be reset
      * @return true if the entry was scheduled
      */
-    synchronized boolean cancel(boolean resetExpiration) {
+    synchronized boolean cancel() {
       boolean result = scheduled;
       if (entryFuture != null)
         entryFuture.cancel(false);
 
       entryFuture = null;
       scheduled = false;
-
-      if (resetExpiration)
-        resetExpiration();
       return result;
     }
 
@@ -644,7 +645,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     writeLock.lock();
     try {
       for (ExpiringEntry<K, V> entry : entries.values())
-        entry.cancel(false);
+        entry.cancel();
       entries.clear();
     } finally {
       writeLock.unlock();
@@ -956,7 +957,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       ExpiringEntry<K, V> entry = entries.remove(key);
       if (entry == null)
         return null;
-      if (entry.cancel(false))
+      if (entry.cancel())
         scheduleEntry(entries.first());
       return entry.getValue();
     } finally {
@@ -972,7 +973,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       ExpiringEntry<K, V> entry = entries.get(key);
       if (entry != null && entry.getValue().equals(value)) {
         entries.remove(key);
-        if (entry.cancel(false))
+        if (entry.cancel())
           scheduleEntry(entries.first());
         return true;
       } else
@@ -1254,7 +1255,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   void resetEntry(ExpiringEntry<K, V> entry, boolean scheduleFirstEntry) {
     writeLock.lock();
     try {
-      boolean scheduled = entry.cancel(true);
+      boolean scheduled = entry.cancel();
       entries.reorder(entry);
 
       if (scheduled || scheduleFirstEntry)
