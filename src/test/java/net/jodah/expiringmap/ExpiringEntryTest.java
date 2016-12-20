@@ -24,16 +24,17 @@ public class ExpiringEntryTest {
   public void testEntryOrdering() {
     AtomicReference<ExpirationPolicy> expirationPolicy = new AtomicReference<ExpirationPolicy>(ExpirationPolicy.CREATED);
     NavigableSet<ExpiringEntry<String, String>> set = new TreeSet<ExpiringEntry<String, String>>();
+    Ticker ticker = new CustomValueTicker();
     ExpiringEntry<String, String> entry1 = new ExpiringEntry<String, String>("a", "a", expirationPolicy,
-      new AtomicLong(1000000));
+      new AtomicLong(1000000), ticker);
     ExpiringEntry<String, String> entry2 = new ExpiringEntry<String, String>("b", "b", expirationPolicy,
-      new AtomicLong(1000000));
+      new AtomicLong(1000000), ticker);
     ExpiringEntry<String, String> entry3 = new ExpiringEntry<String, String>("c", "c", expirationPolicy,
-      new AtomicLong(1000000));
+      new AtomicLong(1000000), ticker);
     ExpiringEntry<String, String> entry4 = new ExpiringEntry<String, String>("e", "e", expirationPolicy,
-      new AtomicLong(5000));
+      new AtomicLong(5000), ticker);
     ExpiringEntry<String, String> entry5 = new ExpiringEntry<String, String>("f", "f", expirationPolicy,
-      new AtomicLong(1100000));
+      new AtomicLong(1100000), ticker);
     set.add(entry1);
     set.add(entry2);
     set.add(entry3);
@@ -53,12 +54,13 @@ public class ExpiringEntryTest {
   public void testEntryReplaceSameKey() {
     AtomicReference<ExpirationPolicy> expirationPolicy = new AtomicReference<ExpirationPolicy>(ExpirationPolicy.CREATED);
     Set<ExpiringEntry<String, String>> set = new TreeSet<ExpiringEntry<String, String>>();
+    Ticker ticker = new CustomValueTicker();
     ExpiringEntry<String, String> entry1 = new ExpiringEntry<String, String>("a", "a", expirationPolicy,
-      new AtomicLong(1000));
+      new AtomicLong(1000), ticker);
     ExpiringEntry<String, String> entry2 = new ExpiringEntry<String, String>("a", "a", expirationPolicy,
-      new AtomicLong(1000));
+      new AtomicLong(1000), ticker);
     ExpiringEntry<String, String> entry3 = new ExpiringEntry<String, String>("a", "a", expirationPolicy,
-      new AtomicLong(1500));
+      new AtomicLong(1500), ticker);
     set.add(entry1);
     assertFalse(set.add(entry2));
     assertFalse(set.add(entry3));
