@@ -8,6 +8,7 @@ A high performance, low-overhead, zero dependency, thread-safe [ConcurrentMap](h
 
 * [Expiration policies](#expiration-policies)
 * [Variable expiration](#variable-expiration)
+* [Maximum size](#maximum-size)
 * [Expiration listeners](#expiration-listeners)
 * [Lazy entry loading](#lazy-entry-loading)
 * [Expiration Introspection](#expiration-introspection)
@@ -16,14 +17,15 @@ Supports Java 6+ though the documentation uses lambdas for simplicity.
 
 ## Usage
 
-ExpiringMap allows you to create a map that expires entries after a certain time period:
+ExpiringMap allows you to create a map that expires entries after a certain time period or when a maximum map size has been exceeded:
 
 ```java
 Map<String, Connection> map = ExpiringMap.builder()
+  .maxSize(123)
   .expiration(30, TimeUnit.SECONDS)
   .build();
   
-// Expires after 30 seconds
+// Expires after 30 seconds or as soon as a 124th element is added and this is the next one to expire based on the expiration policy
 map.put("connection", connection);
 ```
 
@@ -66,6 +68,16 @@ Expiration times and policies can also be changed on the fly:
 ```java
 map.setExpiration(connection, 5, TimeUnit.MINUTES);
 map.setExpirationPolicy(connection, ExpirationPolicy.ACCESSED);
+```
+
+#### Maximum size
+
+Expiration can also occur based on the number of entries in the map exceeding the allowed maximum size:
+
+```java
+Map<String, Connection> map = ExpiringMap.builder()
+  .maxSize(123)
+  .build(); 
 ```
 
 #### Expiration Listeners

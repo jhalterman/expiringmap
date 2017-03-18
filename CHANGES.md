@@ -1,3 +1,9 @@
+# 0.5.8
+
+### New Features
+
+* Added `maxSize`
+
 # 0.5.7
 
 ### Bug Fixes

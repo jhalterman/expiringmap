@@ -214,6 +214,27 @@ public class ExpiringMapTest {
   }
 
   /**
+   * Asserts that putting an entry beyond the max size results in the oldest one being expired.
+   */
+  public void testPutWithMaxSize() throws Exception {
+    // Given
+    Map<String, Integer> map = ExpiringMap.builder().maxSize(2).build();
+
+    // When
+    map.put("foo", 1);
+    Thread.sleep(55);
+    map.put("bar", 1);
+    Thread.sleep(55);
+    map.put("abc", 1);
+    Thread.sleep(55);
+
+    // Then
+    assertNull(map.get("foo"));
+    assertNotNull(map.get("bar"));
+    assertNotNull(map.get("abc"));
+  }
+
+  /**
    * Tests {@link ExpiringMap#removeAsyncExpirationListener(ExpirationListener)}.
    */
   public void testRemoveAsyncExpirationListener() {

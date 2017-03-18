@@ -81,6 +81,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   List<ExpirationListener<K, V>> expirationListeners;
   List<ExpirationListener<K, V>> asyncExpirationListeners;
   private AtomicLong expirationNanos;
+  private int maxSize;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
   private final EntryLoader<? super K, ? extends V> entryLoader;
   private final ExpiringEntryLoader<? super K, ? extends V> expiringEntryLoader;
@@ -134,6 +135,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       asyncExpirationListeners = new CopyOnWriteArrayList<ExpirationListener<K, V>>(builder.asyncExpirationListeners);
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
     expirationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
+    maxSize = builder.maxSize;
     entryLoader = builder.entryLoader;
     expiringEntryLoader = builder.expiringEntryLoader;
   }
@@ -148,6 +150,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     private TimeUnit timeUnit = TimeUnit.SECONDS;
     private boolean variableExpiration;
     private long duration = 60;
+    private int maxSize = Integer.MAX_VALUE;
     private EntryLoader<K, V> entryLoader;
     private ExpiringEntryLoader<K, V> expiringEntryLoader;
 
@@ -178,6 +181,18 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     public Builder<K, V> expiration(long duration, TimeUnit timeUnit) {
       this.duration = duration;
       this.timeUnit = Assert.notNull(timeUnit, "timeUnit");
+      return this;
+    }
+
+    /**
+     * Sets the maximum size of the map. Once this size has been reached, add an additional entry will expire the oldest
+     * one currently in the map.
+     *
+     * @param maxSize The maximum size of the map.
+     */
+    public Builder<K, V> maxSize(int maxSize) {
+      Assert.operation(maxSize > 0, "maxSize");
+      this.maxSize = maxSize;
       return this;
     }
 
@@ -821,6 +836,16 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     return TimeUnit.NANOSECONDS.toMillis(entry.expectedExpiration.get() - System.nanoTime());
   }
 
+  /**
+   * Gets the maximum size of the map. Once this size has been reached, add an additional entry will expire the oldest
+   * one currently in the map.
+   *
+   * @return The maximum size of the map.
+   */
+  public int getMaxSize() {
+    return maxSize;
+  }
+
   @Override
   public int hashCode() {
     readLock.lock();
@@ -1126,6 +1151,17 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       entry.expirationPolicy.set(expirationPolicy);
   }
 
+  /**
+   * Sets the maximum size of the map. Once this size has been reached, add an additional entry will expire the oldest
+   * one currently in the map.
+   *
+   * @param maxSize The maximum size of the map.
+   */
+  public void setMaxSize(int maxSize) {
+    Assert.operation(maxSize > 0, "maxSize");
+    this.maxSize = maxSize;
+  }
+
   @Override
   public int size() {
     readLock.lock();
@@ -1225,6 +1261,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         entry = new ExpiringEntry<K, V>(key, value,
             variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy) : this.expirationPolicy,
             variableExpiration ? new AtomicLong(expirationNanos) : this.expirationNanos);
+        if (entries.size() >= maxSize) {
+          ExpiringEntry<K, V> expiredEntry = entries.first();
+          entries.remove(expiredEntry.key);
+          notifyListeners(expiredEntry);
+        }
         entries.put(key, entry);
         if (entries.size() == 1 || entries.first().equals(entry))
           scheduleEntry(entry);
