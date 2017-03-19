@@ -72,7 +72,8 @@ map.setExpirationPolicy(connection, ExpirationPolicy.ACCESSED);
 
 #### Maximum size
 
-Expiration can also occur based on the number of entries in the map exceeding the allowed maximum size:
+Expiration can also occur based on the number of entries in the map exceeding the allowed maximum size. Once this size
+has been reached, adding an additional entry will expire the first entry in line for expiration based on the expiration policy.
 
 ```java
 Map<String, Connection> map = ExpiringMap.builder()
