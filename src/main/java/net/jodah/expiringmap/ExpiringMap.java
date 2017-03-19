@@ -141,7 +141,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Builds ExpiringMap instances. Defaults to ExpirationPolicy.CREATED and expiration of 60 TimeUnit.SECONDS.
+   * Builds ExpiringMap instances. Defaults to ExpirationPolicy.CREATED, expiration of 60 TimeUnit.SECONDS and
+   * a maxSize of Integer.MAX_VALUE.
    */
   public static final class Builder<K, V> {
     private ExpirationPolicy expirationPolicy = ExpirationPolicy.CREATED;
@@ -185,8 +186,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     /**
-     * Sets the maximum size of the map. Once this size has been reached, add an additional entry will expire the oldest
-     * one currently in the map.
+     * Sets the maximum size of the map. Once this size has been reached, adding an additional entry will expire the
+     * first entry in line for expiration based on the expiration policy.
      *
      * @param maxSize The maximum size of the map.
      */
@@ -837,8 +838,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Gets the maximum size of the map. Once this size has been reached, add an additional entry will expire the oldest
-   * one currently in the map.
+   * Gets the maximum size of the map. Once this size has been reached, adding an additional entry will expire the
+   * first entry in line for expiration based on the expiration policy.
    *
    * @return The maximum size of the map.
    */
@@ -1152,8 +1153,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   /**
-   * Sets the maximum size of the map. Once this size has been reached, add an additional entry will expire the oldest
-   * one currently in the map.
+   * Sets the maximum size of the map. Once this size has been reached, adding an additional entry will expire the
+   * first entry in line for expiration based on the expiration policy.
    *
    * @param maxSize The maximum size of the map.
    */
