@@ -218,7 +218,7 @@ public class ExpiringMapTest {
    */
   public void testPutWithMaxSize() throws Exception {
     // Given
-    Map<String, Integer> map = ExpiringMap.builder().maxSize(2).build();
+    Map<String, Integer> map = ExpiringMap.builder().expirationPolicy(ExpirationPolicy.CREATED).maxSize(2).build();
 
     // When
     map.put("foo", 1);
@@ -231,6 +231,29 @@ public class ExpiringMapTest {
     // Then
     assertNull(map.get("foo"));
     assertNotNull(map.get("bar"));
+    assertNotNull(map.get("abc"));
+  }
+
+  /**
+   * Asserts that putting an entry beyond the max size results in the least recently accessed one being expired.
+   */
+  public void testPutWithMaxSizeAndExpirationPolicyAccessed() throws Exception {
+    // Given
+    Map<String, Integer> map = ExpiringMap.builder().expirationPolicy(ExpirationPolicy.ACCESSED).maxSize(2).build();
+
+    // When
+    map.put("foo", 1);
+    Thread.sleep(55);
+    map.put("bar", 1);
+    Thread.sleep(55);
+    map.get("foo");
+    Thread.sleep(55);
+    map.put("abc", 1);
+    Thread.sleep(55);
+
+    // Then
+    assertNotNull(map.get("foo"));
+    assertNull(map.get("bar"));
     assertNotNull(map.get("abc"));
   }
 
