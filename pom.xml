@@ -9,7 +9,7 @@
 
   <groupId>net.jodah</groupId>
   <artifactId>expiringmap</artifactId>
-  <version>0.5.8-SNAPSHOT</version>
+  <version>0.5.8</version>
   <packaging>bundle</packaging>
   <name>ExpiringMap</name>
   <description>A high performance thread-safe map that expires entries</description>
