@@ -121,8 +121,15 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (LISTENER_SERVICE == null && builder.asyncExpirationListeners != null) {
       synchronized (ExpiringMap.class) {
         if (LISTENER_SERVICE == null) {
-          LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
-              THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
+          if (THREAD_FACTORY == null) {
+            THREAD_FACTORY = new NamedThreadFactory("ExpiringMap-Listener-%s");
+          }
+          if (builder.asyncThreadPoolSize > 0) {
+        	LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newFixedThreadPool(builder.asyncThreadPoolSize, THREAD_FACTORY);  
+          } else {
+            LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(THREAD_FACTORY);
+                ;
+          }
         }
       }
     }
@@ -148,6 +155,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     private ExpirationPolicy expirationPolicy = ExpirationPolicy.CREATED;
     private List<ExpirationListener<K, V>> expirationListeners;
     private List<ExpirationListener<K, V>> asyncExpirationListeners;
+    private int asyncThreadPoolSize = -1;
     private TimeUnit timeUnit = TimeUnit.SECONDS;
     private boolean variableExpiration;
     private long duration = 60;
@@ -299,6 +307,16 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       return (Builder<K1, V1>) this;
     }
 
+    /**
+     * Sets the size of the async listener thread pool 
+     * 
+     * @param threadPoolSize the size of the thread pool used to perform async callbacks
+     */
+    public Builder<K, V> asyncThreadPoolSize(int threadPoolSize) {
+    	this.asyncThreadPoolSize = threadPoolSize;
+        return this;
+      }
+    
     /**
      * Configures the map entry expiration policy.
      * 
