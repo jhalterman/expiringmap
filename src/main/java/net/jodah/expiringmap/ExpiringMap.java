@@ -158,7 +158,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     /**
      * Creates a new Builder object.
      */
-    private Builder() {
+    public Builder() {
     }
 
     /**
@@ -615,9 +615,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   /**
    * Creates an ExpiringMap builder.
-   * 
+   *
    * @return New ExpiringMap builder
+   *
+   * @deprecated New programs should use {@link Builder()}.
    */
+  @Deprecated
   public static Builder<Object, Object> builder() {
     return new Builder<Object, Object>();
   }
