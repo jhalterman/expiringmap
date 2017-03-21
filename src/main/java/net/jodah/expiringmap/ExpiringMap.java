@@ -1342,7 +1342,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
               while (iterator.hasNext() && schedulePending) {
                 ExpiringEntry<K, V> nextEntry = iterator.next();
-                if (nextEntry.expectedExpiration.get() <= System.nanoTime()) {
+                if (nextEntry.expectedExpiration.get() >= System.nanoTime()) {
                   iterator.remove();
                   notifyListeners(nextEntry);
                 } else {
