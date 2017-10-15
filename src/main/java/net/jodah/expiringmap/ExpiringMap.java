@@ -1214,13 +1214,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * 
    * @param entry Entry to expire
    */
-  void notifyListeners(final ExpiringEntry<K, V> entry) {
+  void notifyListeners(final ExpiringEntry<K, V> entry, final ExpirationType type) {
     if (asyncExpirationListeners != null)
       for (final ExpirationListener<K, V> listener : asyncExpirationListeners) {
         LISTENER_SERVICE.execute(new Runnable() {
           public void run() {
             try {
-              listener.expired(entry.key, entry.getValue());
+              listener.expired(entry.key, entry.getValue(), type);
             } catch (Exception ignoreUserExceptions) {
             }
           }
@@ -1230,7 +1230,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (expirationListeners != null)
       for (final ExpirationListener<K, V> listener : expirationListeners) {
         try {
-          listener.expired(entry.key, entry.getValue());
+          listener.expired(entry.key, entry.getValue(), type);
         } catch (Exception ignoreUserExceptions) {
         }
       }
@@ -1265,7 +1265,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         if (entries.size() >= maxSize) {
           ExpiringEntry<K, V> expiredEntry = entries.first();
           entries.remove(expiredEntry.key);
-          notifyListeners(expiredEntry);
+          notifyListeners(expiredEntry, ExpirationType.SIZE);
         }
         entries.put(key, entry);
         if (entries.size() == 1 || entries.first().equals(entry))
@@ -1332,7 +1332,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
           try {
             if (entry != null && entry.scheduled) {
               entries.remove(entry.key);
-              notifyListeners(entry);
+              notifyListeners(entry, ExpirationType.TIME);
             }
 
             try {
@@ -1344,7 +1344,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
                 ExpiringEntry<K, V> nextEntry = iterator.next();
                 if (nextEntry.expectedExpiration.get() <= System.nanoTime()) {
                   iterator.remove();
-                  notifyListeners(nextEntry);
+                  notifyListeners(nextEntry, ExpirationType.TIME);
                 } else {
                   scheduleEntry(nextEntry);
                   schedulePending = false;

@@ -63,7 +63,7 @@ public class ExpirationTest {
     final AtomicBoolean expired = new AtomicBoolean();
     ExpiringMap<String, String> map = ExpiringMap.builder()
         .expiration(180, TimeUnit.MILLISECONDS)
-        .expirationListener((k, v) -> expired.set(true))
+        .expirationListener((k, v, type) -> expired.set(true))
         .build();
 
     map.put("test", "test");
