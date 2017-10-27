@@ -37,9 +37,9 @@ public class ExpiringMapTest {
   public void testAddAndGetAsyncExpirationListener() {
     // Given
     ExpiringMap<String, String> map = ExpiringMap.create();
-    ExpirationListener<String, String> listener1 = (k, v) -> {
+    ExpirationListener<String, String> listener1 = (k, v, type) -> {
     };
-    ExpirationListener<String, String> listener2 = (k, v) -> {
+    ExpirationListener<String, String> listener2 = (k, v, type) -> {
     };
 
     // When
@@ -57,9 +57,9 @@ public class ExpiringMapTest {
   public void testAddExpirationListener() {
     // Given
     ExpiringMap<String, String> map = ExpiringMap.create();
-    ExpirationListener<String, String> listener1 = (k, v) -> {
+    ExpirationListener<String, String> listener1 = (k, v, type) -> {
     };
-    ExpirationListener<String, String> listener2 = (k, v) -> {
+    ExpirationListener<String, String> listener2 = (k, v, type) -> {
     };
 
     // When
@@ -69,6 +69,22 @@ public class ExpiringMapTest {
     // Then
     assertEquals(listener1, map.expirationListeners.get(0));
     assertEquals(listener2, map.expirationListeners.get(1));
+  }
+  
+  /**
+   * Tests {@link ExpiringMap#addExpirationListener(ExpirationListener)}.
+   */
+  public void testExpirationType() {
+    // Given
+    ExpiringMap<String, String> map = ExpiringMap.builder().maxSize(1).build();
+    ExpirationListener<String, String> listener1 = (k, v, type) -> {
+    	assertEquals(type, ExpirationType.SIZE);
+    	assertEquals(k, "a");
+    };
+    map.addExpirationListener(listener1);
+    
+    map.put("a", "a");
+    map.put("b", "b");
   }
 
   /**
@@ -263,9 +279,9 @@ public class ExpiringMapTest {
   public void testRemoveAsyncExpirationListener() {
     // Given
     ExpiringMap<String, String> map = ExpiringMap.create();
-    ExpirationListener<String, String> listener1 = (k, v) -> {
+    ExpirationListener<String, String> listener1 = (k, v, type) -> {
     };
-    ExpirationListener<String, String> listener2 = (k, v) -> {
+    ExpirationListener<String, String> listener2 = (k, v, type) -> {
     };
 
     // When
@@ -286,9 +302,9 @@ public class ExpiringMapTest {
   public void testRemoveExpirationListener() {
     // Given
     ExpiringMap<String, String> map = ExpiringMap.create();
-    ExpirationListener<String, String> listener1 = (k, v) -> {
+    ExpirationListener<String, String> listener1 = (k, v, type) -> {
     };
-    ExpirationListener<String, String> listener2 = (k, v) -> {
+    ExpirationListener<String, String> listener2 = (k, v, type) -> {
     };
 
     // When

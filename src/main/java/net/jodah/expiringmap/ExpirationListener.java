@@ -13,5 +13,5 @@ public interface ExpirationListener<K, V> {
    * @param key Expired key
    * @param value Expired value
    */
-  void expired(K key, V value);
+  void expired(K key, V value, ExpirationType type);
 }

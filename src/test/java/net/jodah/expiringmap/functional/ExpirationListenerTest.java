@@ -27,7 +27,7 @@ public class ExpirationListenerTest {
 
     Map<String, String> map = ExpiringMap.builder()
         .expiration(100, TimeUnit.MILLISECONDS)
-        .expirationListener((thekey, thevalue) -> {
+        .expirationListener((thekey, thevalue, type) -> {
           waiter.assertEquals(key, thekey);
           waiter.assertEquals(value, thevalue);
           waiter.resume();
@@ -48,7 +48,7 @@ public class ExpirationListenerTest {
 
     Map<String, String> map = ExpiringMap.builder()
         .expiration(100, TimeUnit.MILLISECONDS)
-        .expirationListener((thekey, thevalue) -> {
+        .expirationListener((thekey, thevalue, type) -> {
           waiter.assertEquals(key, thekey);
           waiter.assertEquals(value, thevalue);
           waiter.resume();

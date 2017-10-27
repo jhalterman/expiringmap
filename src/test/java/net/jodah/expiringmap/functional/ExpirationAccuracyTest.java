@@ -42,7 +42,7 @@ public class ExpirationAccuracyTest extends ConcurrentTestCase {
   private void putTest(final int threadCount, final int mapCount, final long duration) throws Throwable {
     final String finalKey = "final";
 
-    ExpirationListener<String, Long> expirationListener = (key, startTime) -> {
+    ExpirationListener<String, Long> expirationListener = (key, startTime, type) -> {
       // Assert that expiration is within 1/10 second of expected time
       threadAssertTrue(System.currentTimeMillis() - (startTime + duration) < 100);
       if (key.equals(finalKey))
