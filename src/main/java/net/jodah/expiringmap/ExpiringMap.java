@@ -13,8 +13,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -412,7 +412,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   /** Entry TreeHashMap implementation for variable expiration ExpiringMap entries. */
   private static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>> implements EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
-    SortedSet<ExpiringEntry<K, V>> sortedSet = new TreeSet<ExpiringEntry<K, V>>();
+    SortedSet<ExpiringEntry<K, V>> sortedSet = new ConcurrentSkipListSet<>();
 
     @Override
     public void clear() {
