@@ -1,3 +1,9 @@
+# 0.5.9
+
+### Bug Fixes
+
+* Fixed #55 - ConcurrentModificationException when using EntryTreeHashMap's iterator
+
 # 0.5.8
 
 ### New Features
