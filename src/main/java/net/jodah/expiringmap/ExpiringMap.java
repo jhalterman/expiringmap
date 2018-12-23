@@ -412,7 +412,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   /** Entry TreeHashMap implementation for variable expiration ExpiringMap entries. */
   private static class EntryTreeHashMap<K, V> extends HashMap<K, ExpiringEntry<K, V>> implements EntryMap<K, V> {
     private static final long serialVersionUID = 1L;
-    SortedSet<ExpiringEntry<K, V>> sortedSet = new ConcurrentSkipListSet<>();
+    SortedSet<ExpiringEntry<K, V>> sortedSet = new ConcurrentSkipListSet<ExpiringEntry<K, V>>();
 
     @Override
     public void clear() {
