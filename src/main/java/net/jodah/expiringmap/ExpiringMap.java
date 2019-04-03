@@ -1385,11 +1385,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   public synchronized static void shutdown() {
     if (EXPIRER != null) {
-      EXPIRER.shutdown();
+      EXPIRER.shutdownNow();
       EXPIRER = null;
     }
     if (LISTENER_SERVICE != null) {
-      LISTENER_SERVICE.shutdown();
+      LISTENER_SERVICE.shutdownNow();
       LISTENER_SERVICE = null;
     }
   }
