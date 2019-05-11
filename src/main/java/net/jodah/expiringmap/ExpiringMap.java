@@ -82,6 +82,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   List<ExpirationListener<K, V>> asyncExpirationListeners;
   private AtomicLong expirationNanos;
   private int maxSize;
+  private UncaughtListenerExceptionHandler uncaughtListenerExceptionHandler;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
   private final EntryLoader<? super K, ? extends V> entryLoader;
   private final ExpiringEntryLoader<? super K, ? extends V> expiringEntryLoader;
@@ -1163,6 +1164,15 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     this.maxSize = maxSize;
   }
 
+  /**
+   * Sets uncaught exception listener for {@link ExpirationListener}
+   *
+   * @param uncaughtListenerExceptionHandler the exception handler
+   */
+  public void setUncaughtListenerExceptionHandler(UncaughtListenerExceptionHandler uncaughtListenerExceptionHandler) {
+    this.uncaughtListenerExceptionHandler = uncaughtListenerExceptionHandler;
+  }
+
   @Override
   public int size() {
     readLock.lock();
@@ -1221,7 +1231,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
           public void run() {
             try {
               listener.expired(entry.key, entry.getValue());
-            } catch (Exception ignoreUserExceptions) {
+            } catch (Throwable t) {
+              if (uncaughtListenerExceptionHandler != null) {
+                uncaughtListenerExceptionHandler.exceptionCaught(t);
+              }
             }
           }
         });
@@ -1231,7 +1244,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       for (final ExpirationListener<K, V> listener : expirationListeners) {
         try {
           listener.expired(entry.key, entry.getValue());
-        } catch (Exception ignoreUserExceptions) {
+        } catch (Throwable t) {
+          if (uncaughtListenerExceptionHandler != null) {
+            uncaughtListenerExceptionHandler.exceptionCaught(t);
+          }
         }
       }
   }
