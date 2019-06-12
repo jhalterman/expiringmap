@@ -1,18 +1,7 @@
 package net.jodah.expiringmap;
 
 import java.lang.ref.WeakReference;
-import java.util.AbstractCollection;
-import java.util.AbstractSet;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Set;
-import java.util.SortedSet;
+import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -424,7 +413,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     public boolean containsValue(Object value) {
       for (ExpiringEntry<K, V> entry : values()) {
         V v = entry.value;
-        if (v == value || (value != null && value.equals(v)))
+        if (Objects.equals(value, v))
           return true;
       }
       return false;

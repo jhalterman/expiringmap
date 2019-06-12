@@ -1,5 +1,6 @@
 package net.jodah.expiringmap;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -109,7 +110,7 @@ public final class ExpiringValue<V> {
     }
 
     ExpiringValue<?> that = (ExpiringValue<?>) o;
-    return !(value != null ? !value.equals(that.value) : that.value != null)
+    return Objects.equals(value, that.value)
         && expirationPolicy == that.expirationPolicy && duration == that.duration && timeUnit == that.timeUnit;
 
   }
