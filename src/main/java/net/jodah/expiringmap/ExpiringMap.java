@@ -654,6 +654,15 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (asyncExpirationListeners == null)
       asyncExpirationListeners = new CopyOnWriteArrayList<ExpirationListener<K, V>>();
     asyncExpirationListeners.add(listener);
+    // If asyncListener was not added on Builder, LISTENER_SERVICE was not initialized and remain null
+    if (LISTENER_SERVICE == null) {
+      synchronized (ExpiringMap.class) {
+        if (LISTENER_SERVICE == null) {
+          LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
+                  THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
+        }
+      }
+    }
   }
 
   @Override
