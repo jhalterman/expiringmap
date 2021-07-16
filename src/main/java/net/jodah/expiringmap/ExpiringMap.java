@@ -118,14 +118,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       }
     }
 
-    if (LISTENER_SERVICE == null && builder.asyncExpirationListeners != null) {
-      synchronized (ExpiringMap.class) {
-        if (LISTENER_SERVICE == null) {
-          LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
-              THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
-        }
-      }
-    }
+    if (LISTENER_SERVICE == null && builder.asyncExpirationListeners != null)
+      initListenerService();
 
     variableExpiration = builder.variableExpiration;
     entries = variableExpiration ? new EntryTreeHashMap<K, V>() : new EntryLinkedHashMap<K, V>();
@@ -655,14 +649,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       asyncExpirationListeners = new CopyOnWriteArrayList<ExpirationListener<K, V>>();
     asyncExpirationListeners.add(listener);
     // If asyncListener was not added on Builder, LISTENER_SERVICE was not initialized and remain null
-    if (LISTENER_SERVICE == null) {
-      synchronized (ExpiringMap.class) {
-        if (LISTENER_SERVICE == null) {
-          LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
-                  THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
-        }
-      }
-    }
+    if (LISTENER_SERVICE == null)
+      initListenerService();
   }
 
   @Override
@@ -1390,5 +1378,14 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         throw new UnsupportedOperationException();
       }
     };
+  }
+
+  private void initListenerService() {
+    synchronized (ExpiringMap.class) {
+      if (LISTENER_SERVICE == null) {
+        LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
+            THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
+      }
+    }
   }
 }
