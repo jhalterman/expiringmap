@@ -1,8 +1,8 @@
 # ExpiringMap
 [![Build Status](https://travis-ci.org/jhalterman/expiringmap.svg)](https://travis-ci.org/jhalterman/expiringmap)
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/net.jodah/expiringmap/badge.svg)](https://maven-badges.herokuapp.com/maven-central/net.jodah/expiringmap/)
+[![Maven Central](https://img.shields.io/maven-central/v/net.jodah/expiringmap.svg?maxAge=60&colorB=53C92E)](https://maven-badges.herokuapp.com/maven-central/net.jodah/expiringmap)
 [![License](http://img.shields.io/:license-apache-brightgreen.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
-[![JavaDoc](http://javadoc-badge.appspot.com/net.jodah/expiringmap.svg?label=javadoc)](https://jhalterman.github.com/expiringmap/javadoc)
+[![JavaDoc](https://img.shields.io/maven-central/v/net.jodah/expiringmap.svg?maxAge=60&label=javadoc&color=blue)](https://jodah.net/expiringmap/javadoc/)
 
 A high performance, low-overhead, zero dependency, thread-safe [ConcurrentMap](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ConcurrentMap.html) implementation that expires entries. Features include:
 
@@ -169,7 +169,7 @@ See the [GAE docs on threads](https://cloud.google.com/appengine/docs/java/runti
 
 ## Additional Resources
 
-* [Javadocs](https://jhalterman.github.com/expiringmap/javadoc)
+* [Javadocs](https://jodah.net/expiringmap/javadoc)
 * [Who's Using ExpiringMap](https://github.com/jhalterman/expiringmap/wiki/Who's-Using-ExpiringMap)
 
 ## License
