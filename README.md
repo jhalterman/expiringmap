@@ -174,4 +174,4 @@ See the [GAE docs on threads](https://cloud.google.com/appengine/docs/java/runti
 
 ## License
 
-Copyright 2009-2016 Jonathan Halterman - Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
+Copyright Jonathan Halterman and friends. Released under the [Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.html).
