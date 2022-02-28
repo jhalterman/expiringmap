@@ -1,14 +1,19 @@
 sudo: false
-language: 
-  - java
-jdk:
-  - oraclejdk8
+language: java
+dist: trusty
+
 install:
   - mvn test-compile -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+
+jdk:
+  - oraclejdk8
+
 script:
   - mvn test jacoco:report
+
 after_success:
   - mvn coveralls:report
+
 notifications:
   email: false
 

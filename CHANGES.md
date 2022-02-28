@@ -1,3 +1,7 @@
+# 0.5.10
+
+* Fixed #54 - Async expiration listeners do not work if the map is not built with them.
+
 # 0.5.9
 
 ### Bug Fixes
