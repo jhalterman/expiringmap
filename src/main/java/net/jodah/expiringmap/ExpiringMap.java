@@ -1384,14 +1384,14 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     synchronized (ExpiringMap.class) {
       if (LISTENER_SERVICE == null) {
         LISTENER_SERVICE = (ThreadPoolExecutor) Executors.newCachedThreadPool(
-                THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
+            THREAD_FACTORY == null ? new NamedThreadFactory("ExpiringMap-Listener-%s") : THREAD_FACTORY);
       }
     }
   }
 
   /**
    * Free up {@link Executors} used by <code>ExpiringMap</code> to manage expiration and listeners.
-   * This will stop the expiration process for all instances of this class, but it is useful before unloading this class from the classloader in order not to leave classes running (e.g. in a {@link javax.servlet.ServletContextListener#contextDestroyed(ServletContextEvent)}).
+   * This will stop the expiration process for all running instances of this class, but it is useful before unloading this class from the classloader in order not to leave classes running (e.g. in a {@link javax.servlet.ServletContextListener#contextDestroyed(ServletContextEvent)}).
    */
   public synchronized static void shutdown() {
     if (EXPIRER != null) {
