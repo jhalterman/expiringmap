@@ -4,6 +4,7 @@ import java.lang.ref.WeakReference;
 import java.util.AbstractCollection;
 import java.util.AbstractSet;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -50,8 +51,8 @@ import net.jodah.expiringmap.internal.NamedThreadFactory;
  * Example usages:
  * 
  * <pre>
- * {@code 
- * Map<String, Integer> map = ExpiringMap.create(); 
+ * {@code
+ * Map<String, Integer> map = ExpiringMap.create();
  * Map<String, Integer> map = ExpiringMap.builder().expiration(30, TimeUnit.SECONDS).build();
  * Map<String, Connection> map = ExpiringMap.builder()
  *   .expiration(10, TimeUnit.MINUTES)
@@ -60,10 +61,10 @@ import net.jodah.expiringmap.internal.NamedThreadFactory;
  *       return new Connection(address);
  *     }
  *   })
- *   .expirationListener(new ExpirationListener<String, Connection>() { 
- *     public void expired(String key, Connection connection) { 
+ *   .expirationListener(new ExpirationListener<String, Connection>() {
+ *     public void expired(String key, Connection connection) {
  *       connection.close();
- *     } 
+ *     }
  *   })
  *   .build();
  * }
@@ -367,8 +368,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     abstract class AbstractHashIterator {
-      private final Iterator<Map.Entry<K, ExpiringEntry<K, V>>> iterator = entrySet().iterator();
+      private final Iterator<Map.Entry<K, ExpiringEntry<K, V>>> iterator;
       private ExpiringEntry<K, V> next;
+
+      @SuppressWarnings({"unchecked", "rawtypes"})
+      AbstractHashIterator() {
+        iterator = (Iterator) Arrays.asList(entrySet().toArray(new Map.Entry[0])).iterator();
+      }
 
       public boolean hasNext() {
         return iterator.hasNext();
@@ -385,19 +391,19 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     final class KeyIterator extends AbstractHashIterator implements Iterator<K> {
-      public final K next() {
+      public K next() {
         return getNext().key;
       }
     }
 
     final class ValueIterator extends AbstractHashIterator implements Iterator<V> {
-      public final V next() {
+      public V next() {
         return getNext().value;
       }
     }
 
     public final class EntryIterator extends AbstractHashIterator implements Iterator<Map.Entry<K, V>> {
-      public final Map.Entry<K, V> next() {
+      public Map.Entry<K, V> next() {
         return mapEntryFor(getNext());
       }
     }
@@ -879,8 +885,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
       @Override
       public Iterator<K> iterator() {
-        return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new KeyIterator()
-            : ((EntryTreeHashMap<K, V>) entries).new KeyIterator();
+        readLock.lock();
+        try {
+          return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new KeyIterator()
+                  : ((EntryTreeHashMap<K, V>) entries).new KeyIterator();
+        } finally {
+          readLock.unlock();
+        }
       }
 
       @Override
@@ -1195,8 +1206,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
       @Override
       public Iterator<V> iterator() {
-        return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new ValueIterator()
-            : ((EntryTreeHashMap<K, V>) entries).new ValueIterator();
+        readLock.lock();
+        try {
+          return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new ValueIterator()
+                  : ((EntryTreeHashMap<K, V>) entries).new ValueIterator();
+        } finally {
+          readLock.unlock();
+        }
       }
 
       @Override
