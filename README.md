@@ -15,7 +15,21 @@ A high performance, low-overhead, zero dependency, thread-safe [ConcurrentMap](h
 
 Supports Java 6+ though the documentation uses lambdas for simplicity.
 
+*Released `net.jodah:expiringmap:0.5.10`*
+
 ## Usage
+Add ExpiringMap dependency to your project:
+```xml
+# Maven
+<dependency>
+    <groupId>net.jodah</groupId>
+    <artifactId>expiringmap</artifactId>
+    <version>0.5.10</version>
+</dependency>
+
+# Gradle
+implementation 'net.jodah:expiringmap:0.5.10'
+```
 
 ExpiringMap allows you to create a map that expires entries after a certain time period or when a maximum map size has been exceeded:
 
