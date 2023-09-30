@@ -1,26 +1,26 @@
 /*
  * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 var moduleSearchIndex;
@@ -29,11 +29,11 @@ var typeSearchIndex;
 var memberSearchIndex;
 var tagSearchIndex;
 function loadScripts(doc, tag) {
-    createElem(doc, tag, 'script-dir/jszip/dist/jszip.js');
-    createElem(doc, tag, 'script-dir/jszip-utils/dist/jszip-utils.js');
+    createElem(doc, tag, 'jquery/jszip/dist/jszip.js');
+    createElem(doc, tag, 'jquery/jszip-utils/dist/jszip-utils.js');
     if (window.navigator.userAgent.indexOf('MSIE ') > 0 || window.navigator.userAgent.indexOf('Trident/') > 0 ||
             window.navigator.userAgent.indexOf('Edge/') > 0) {
-        createElem(doc, tag, 'script-dir/jszip-utils/dist/jszip-utils-ie.js');
+        createElem(doc, tag, 'jquery/jszip-utils/dist/jszip-utils-ie.js');
     }
     createElem(doc, tag, 'search.js');
 
@@ -102,6 +102,9 @@ function loadScripts(doc, tag) {
     if (!tagSearchIndex) {
         createElem(doc, tag, 'tag-search-index.js');
     }
+    $(window).resize(function() {
+        $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
+    });
 }
 
 function createElem(doc, tag, path) {
@@ -126,34 +129,21 @@ function show(type) {
 }
 
 function updateTabs(type) {
-    var firstRow = document.getElementById(Object.keys(data)[0]);
-    var table = firstRow.closest('table');
     for (var value in tabs) {
-        var tab = document.getElementById(tabs[value][0]);
+        var sNode = document.getElementById(tabs[value][0]);
+        var spanNode = sNode.firstChild;
         if (value == type) {
-            tab.className = activeTableTab;
-            tab.innerHTML = tabs[value][1];
-            tab.setAttribute('aria-selected', true);
-            tab.setAttribute('tabindex',0);
-            table.setAttribute('aria-labelledby', tabs[value][0]);
+            sNode.className = activeTableTab;
+            spanNode.innerHTML = tabs[value][1];
         }
         else {
-            tab.className = tableTab;
-            tab.setAttribute('aria-selected', false);
-            tab.setAttribute('tabindex',-1);
-            tab.setAttribute('onclick', "show("+ value + ")");
-            tab.innerHTML = tabs[value][1];
+            sNode.className = tableTab;
+            spanNode.innerHTML = "<a href=\"javascript:show("+ value + ");\">" + tabs[value][1] + "</a>";
         }
     }
 }
 
-function switchTab(e) {
-    if (e.keyCode == 37 || e.keyCode == 38) {
-        $("[aria-selected=true]").prev().click().focus();
-        e.preventDefault();
-    }
-    if (e.keyCode == 39 || e.keyCode == 40) {
-        $("[aria-selected=true]").next().click().focus();
-        e.preventDefault();
-    }
+function updateModuleFrame(pFrame, cFrame) {
+    top.packageFrame.location = pFrame;
+    top.classFrame.location = cFrame;
 }
