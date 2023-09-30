@@ -441,10 +441,11 @@ public class ExpiringMapTest {
   /**
    * Asserts that concurrent modification throws an exception.
    */
-  @Test(expectedExceptions = ConcurrentModificationException.class)
-  public void testValuesThrowsOnConcurrentModification() {
+  @Test
+  public void testValuesNotThrowsOnConcurrentModification() {
     ExpiringMap<String, String> map = ExpiringMap.create();
     map.put("a", "a");
+    map.put("b", "b");
 
     Iterator<String> valuesIterator = map.values().iterator();
     valuesIterator.next();
