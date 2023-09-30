@@ -1,3 +1,7 @@
+# 0.5.11
+
+* Fixed #10, #30 - ConcurrentModificationException while iterating on entries
+
 # 0.5.10
 
 * Fixed #54 - Async expiration listeners do not work if the map is not built with them.
