@@ -691,6 +691,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /**
+   * Returns a copy of the map's entries, which can be iterated over safely by multiple threads.
+   *
+   * @return Copied set of map entries.
+   */
   @Override
   public Set<Map.Entry<K, V>> entrySet() {
     return new AbstractSet<Map.Entry<K, V>>() {
@@ -870,6 +875,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /**
+   * Returns a copy of the map's keys, which can be iterated over safely by multiple threads.
+   *
+   * @return Copied set of map keys.
+   */
   @Override
   public Set<K> keySet() {
     return new AbstractSet<K>() {
@@ -1191,6 +1201,11 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  /**
+   * Returns a copy of the map's values, which can be iterated over safely by multiple threads.
+   *
+   * @return Copied set of map values.
+   */
   @Override
   public Collection<V> values() {
     return new AbstractCollection<V>() {
