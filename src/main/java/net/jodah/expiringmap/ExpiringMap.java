@@ -714,8 +714,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
       @Override
       public Iterator<Map.Entry<K, V>> iterator() {
-        return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new EntryIterator()
-            : ((EntryTreeHashMap<K, V>) entries).new EntryIterator();
+        readLock.lock();
+        try {
+          return (entries instanceof EntryLinkedHashMap) ? ((EntryLinkedHashMap<K, V>) entries).new EntryIterator()
+                  : ((EntryTreeHashMap<K, V>) entries).new EntryIterator();
+        } finally {
+          readLock.unlock();
+        }
       }
 
       @Override
