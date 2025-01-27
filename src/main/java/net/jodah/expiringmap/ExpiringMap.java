@@ -1424,4 +1424,19 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       }
     }
   }
+
+  /**
+   * Free up {@link Executors} used by <code>ExpiringMap</code> to manage expiration and listeners.
+   * This will stop the expiration process for all running instances of this class, but it is useful before unloading this class from the classloader in order not to leave classes running (e.g. in a {@link javax.servlet.ServletContextListener#contextDestroyed(ServletContextEvent)}).
+   */
+  public synchronized static void shutdown() {
+    if (EXPIRER != null) {
+      EXPIRER.shutdownNow();
+      EXPIRER = null;
+    }
+    if (LISTENER_SERVICE != null) {
+      LISTENER_SERVICE.shutdownNow();
+      LISTENER_SERVICE = null;
+    }
+  }
 }
