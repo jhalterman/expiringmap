@@ -126,7 +126,7 @@ Lazily loaded entries can also be made to expire at varying times:
 
 ```java
 Map<String, Connection> connections = ExpiringMap.builder()
-  .expiringEntry(address -> new ExpiringValue(new Connection(address), 5, TimeUnit.MINUTES))
+  .expiringEntryLoader((ExpiringEntryLoader<String, Connection>) address -> new ExpiringValue(new Connection(address), 5, TimeUnit.MINUTES))
   .build();
 ```
 
