@@ -78,6 +78,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   static volatile ScheduledExecutorService EXPIRER;
   static volatile ThreadPoolExecutor LISTENER_SERVICE;
   static ThreadFactory THREAD_FACTORY;
+  private static final long NO_EXPIRATION = Long.MAX_VALUE;
 
   List<ExpirationListener<K, V>> expirationListeners;
   List<ExpirationListener<K, V>> asyncExpirationListeners;
@@ -598,7 +599,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
     /** Resets the entry's expected expiration. */
     void resetExpiration() {
-      expectedExpiration.set(expirationNanos.get() + System.nanoTime());
+      long duration = expirationNanos.get();
+      expectedExpiration.set(duration == NO_EXPIRATION ? NO_EXPIRATION : safeAdd(System.nanoTime(), duration));
     }
 
     /** Marks the entry as scheduled. */
@@ -611,6 +613,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     synchronized void setValue(V value) {
       this.value = value;
     }
+  }
+
+  private static long safeAdd(long base, long delta) {
+    long result = base + delta;
+    if (((base ^ result) & (delta ^ result)) < 0)
+      return Long.MAX_VALUE;
+    return result;
   }
 
   /**
@@ -1355,6 +1364,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       if (entry.scheduled)
         return;
 
+      long expectedExpiration = entry.expectedExpiration.get();
+      if (expectedExpiration == NO_EXPIRATION)
+        return;
+
       final WeakReference<ExpiringEntry<K, V>> entryReference = new WeakReference<ExpiringEntry<K, V>>(entry);
       runnable = new Runnable() {
         @Override
@@ -1391,8 +1404,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         }
       };
 
-      Future<?> entryFuture = EXPIRER.schedule(runnable, entry.expectedExpiration.get() - System.nanoTime(),
-          TimeUnit.NANOSECONDS);
+      long now = System.nanoTime();
+      long delay = expectedExpiration - now;
+      if (expectedExpiration <= now)
+        delay = 0;
+      else if (delay < 0)
+        delay = Long.MAX_VALUE;
+      Future<?> entryFuture = EXPIRER.schedule(runnable, delay, TimeUnit.NANOSECONDS);
       entry.schedule(entryFuture);
     }
   }
