@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Random;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.concurrent.ConcurrentMap;
@@ -78,6 +79,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   static volatile ScheduledExecutorService EXPIRER;
   static volatile ThreadPoolExecutor LISTENER_SERVICE;
   static ThreadFactory THREAD_FACTORY;
+  private static final ThreadLocal<Random> RNG = new ThreadLocal<Random>() {
+    @Override
+    protected Random initialValue() {
+      return new Random();
+    }
+  };
 
   List<ExpirationListener<K, V>> expirationListeners;
   List<ExpirationListener<K, V>> asyncExpirationListeners;
@@ -92,6 +99,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   /** Guarded by "readWriteLock" */
   private final EntryMap<K, V> entries;
   private final boolean variableExpiration;
+  private final double jitterPercent;
+  private final double probabilisticProbability;
+  private final double probabilisticWindowPercent;
+  private final boolean probabilisticExpirationEnabled;
 
   /**
    * Sets the {@link ThreadFactory} that is used to create expiration and listener callback threads for all ExpiringMap
@@ -130,6 +141,10 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       asyncExpirationListeners = new CopyOnWriteArrayList<ExpirationListener<K, V>>(builder.asyncExpirationListeners);
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
     expirationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
+    jitterPercent = builder.jitterPercent;
+    probabilisticProbability = builder.probabilisticProbability;
+    probabilisticWindowPercent = builder.probabilisticWindowPercent;
+    probabilisticExpirationEnabled = probabilisticProbability > 0.0 && probabilisticWindowPercent > 0.0;
     maxSize = builder.maxSize;
     entryLoader = builder.entryLoader;
     expiringEntryLoader = builder.expiringEntryLoader;
@@ -149,6 +164,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     private int maxSize = Integer.MAX_VALUE;
     private EntryLoader<K, V> entryLoader;
     private ExpiringEntryLoader<K, V> expiringEntryLoader;
+    private double jitterPercent;
+    private double probabilisticProbability;
+    private double probabilisticWindowPercent;
 
     /**
      * Creates a new Builder object.
@@ -177,6 +195,36 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     public Builder<K, V> expiration(long duration, TimeUnit timeUnit) {
       this.duration = duration;
       this.timeUnit = Assert.notNull(timeUnit, "timeUnit");
+      return this;
+    }
+
+    /**
+     * Adds random jitter to the base expiration duration. A jitter percent of
+     * 0.2 applies +/-20% to the configured duration.
+     *
+     * @param jitterPercent percentage of the base duration to jitter, in [0, 1)
+     */
+    public Builder<K, V> expirationJitter(double jitterPercent) {
+      if (Double.isNaN(jitterPercent) || jitterPercent < 0.0 || jitterPercent >= 1.0)
+        throw new IllegalArgumentException("jitterPercent must be >= 0 and < 1");
+      this.jitterPercent = jitterPercent;
+      return this;
+    }
+
+    /**
+     * Enables probabilistic early expiration when an entry is within the given
+     * window of its TTL.
+     *
+     * @param probability chance to expire early on access, in [0, 1]
+     * @param windowPercent portion of TTL defining the early-expiration window, in [0, 1]
+     */
+    public Builder<K, V> probabilisticExpiration(double probability, double windowPercent) {
+      if (Double.isNaN(probability) || probability < 0.0 || probability > 1.0)
+        throw new IllegalArgumentException("probability must be between 0 and 1");
+      if (Double.isNaN(windowPercent) || windowPercent < 0.0 || windowPercent > 1.0)
+        throw new IllegalArgumentException("windowPercent must be between 0 and 1");
+      this.probabilisticProbability = probability;
+      this.probabilisticWindowPercent = windowPercent;
       return this;
     }
 
@@ -508,6 +556,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   /** Expiring map entry implementation. */
   static class ExpiringEntry<K, V> implements Comparable<ExpiringEntry<K, V>> {
     final AtomicLong expirationNanos;
+    final double jitterPercent;
     /** Epoch time at which the entry is expected to expire */
     final AtomicLong expectedExpiration;
     final AtomicReference<ExpirationPolicy> expirationPolicy;
@@ -527,11 +576,13 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
      * @param expirationPolicy for the entry
      * @param expirationNanos for the entry
      */
-    ExpiringEntry(K key, V value, AtomicReference<ExpirationPolicy> expirationPolicy, AtomicLong expirationNanos) {
+    ExpiringEntry(K key, V value, AtomicReference<ExpirationPolicy> expirationPolicy, AtomicLong expirationNanos,
+        double jitterPercent) {
       this.key = key;
       this.value = value;
       this.expirationPolicy = expirationPolicy;
       this.expirationNanos = expirationNanos;
+      this.jitterPercent = jitterPercent;
       this.expectedExpiration = new AtomicLong();
       resetExpiration();
     }
@@ -598,7 +649,9 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
     /** Resets the entry's expected expiration. */
     void resetExpiration() {
-      expectedExpiration.set(expirationNanos.get() + System.nanoTime());
+      long duration = expirationNanos.get();
+      long jittered = applyJitter(duration, jitterPercent);
+      expectedExpiration.set(jittered + System.nanoTime());
     }
 
     /** Marks the entry as scheduled. */
@@ -613,9 +666,21 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
+  private static long applyJitter(long duration, double jitterPercent) {
+    if (jitterPercent <= 0.0 || duration <= 0)
+      return duration;
+    double delta = (RNG.get().nextDouble() * 2.0 - 1.0) * (duration * jitterPercent);
+    double result = duration + delta;
+    if (result >= Long.MAX_VALUE)
+      return Long.MAX_VALUE;
+    if (result <= 0.0)
+      return 0;
+    return (long) result;
+  }
+
   /**
    * Creates an ExpiringMap builder.
-   * 
+   *
    * @return New ExpiringMap builder
    */
   public static Builder<Object, Object> builder() {
@@ -756,10 +821,55 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
     if (entry == null) {
       return load((K) key);
-    } else if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
+    } else if (shouldExpireEarly(entry)) {
+      if (expireEntryEarly(entry))
+        return load((K) key);
+    }
+
+    if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
       resetEntry(entry, false);
 
     return entry.getValue();
+  }
+
+  private boolean shouldExpireEarly(ExpiringEntry<K, V> entry) {
+    if (!probabilisticExpirationEnabled)
+      return false;
+
+    long duration = entry.expirationNanos.get();
+    if (duration <= 0)
+      return false;
+
+    long window = (long) (duration * probabilisticWindowPercent);
+    if (window <= 0)
+      return false;
+
+    long remaining = entry.expectedExpiration.get() - System.nanoTime();
+    if (remaining <= 0 || remaining > window)
+      return false;
+
+    return RNG.get().nextDouble() < probabilisticProbability;
+  }
+
+  private boolean expireEntryEarly(ExpiringEntry<K, V> entry) {
+    boolean expired = false;
+    writeLock.lock();
+    try {
+      ExpiringEntry<K, V> current = entries.get(entry.key);
+      if (current == null || current != entry)
+        return false;
+
+      entries.remove(entry.key);
+      if (entry.cancel())
+        scheduleEntry(entries.first());
+      expired = true;
+    } finally {
+      writeLock.unlock();
+    }
+
+    if (expired)
+      notifyListeners(entry);
+    return expired;
   }
 
   private V load(K key) {
@@ -1294,7 +1404,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       if (entry == null) {
         entry = new ExpiringEntry<K, V>(key, value,
             variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy) : this.expirationPolicy,
-            variableExpiration ? new AtomicLong(expirationNanos) : this.expirationNanos);
+            variableExpiration ? new AtomicLong(expirationNanos) : this.expirationNanos, jitterPercent);
         if (entries.size() >= maxSize) {
           ExpiringEntry<K, V> expiredEntry = entries.first();
           entries.remove(expiredEntry.key);
