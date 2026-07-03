@@ -11,8 +11,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.testng.annotations.Test;
 
-import net.jodah.expiringmap.ExpiringMap.ExpiringEntry;
-
 /**
  * Tests {@link ExpiringEntry}.
  */
