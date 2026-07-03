@@ -81,7 +81,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   List<ExpirationListener<K, V>> expirationListeners;
   List<ExpirationListener<K, V>> asyncExpirationListeners;
-  private AtomicLong expirationNanos;
+  private AtomicLong defaultExpirationDurationNanos;
   private int maxSize;
   private final AtomicReference<ExpirationPolicy> expirationPolicy;
   private final EntryLoader<? super K, ? extends V> entryLoader;
@@ -129,7 +129,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     if (builder.asyncExpirationListeners != null)
       asyncExpirationListeners = new CopyOnWriteArrayList<ExpirationListener<K, V>>(builder.asyncExpirationListeners);
     expirationPolicy = new AtomicReference<ExpirationPolicy>(builder.expirationPolicy);
-    expirationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
+    defaultExpirationDurationNanos = new AtomicLong(TimeUnit.NANOSECONDS.convert(builder.duration, builder.timeUnit));
     maxSize = builder.maxSize;
     entryLoader = builder.entryLoader;
     expiringEntryLoader = builder.expiringEntryLoader;
@@ -321,8 +321,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   /** Entry map definition. */
   private interface EntryMap<K, V> extends Map<K, ExpiringEntry<K, V>> {
-    /** Returns the first entry in the map or null if the map is empty. */
-    ExpiringEntry<K, V> first();
+    /** Returns the next entry to expire in the map or null if the map is empty. */
+    ExpiringEntry<K, V> getNextToExpire();
 
     /**
      * Reorders the given entry in the map.
@@ -351,7 +351,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     @Override
-    public ExpiringEntry<K, V> first() {
+    public ExpiringEntry<K, V> getNextToExpire() {
       return isEmpty() ? null : values().iterator().next();
     }
 
@@ -431,7 +431,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
 
     @Override
-    public ExpiringEntry<K, V> first() {
+    public ExpiringEntry<K, V> getNextToExpire() {
       return sortedSet.isEmpty() ? null : sortedSet.first();
     }
 
@@ -505,114 +505,6 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     }
   }
 
-  /** Expiring map entry implementation. */
-  static class ExpiringEntry<K, V> implements Comparable<ExpiringEntry<K, V>> {
-    final AtomicLong expirationNanos;
-    /** Epoch time at which the entry is expected to expire */
-    final AtomicLong expectedExpiration;
-    final AtomicReference<ExpirationPolicy> expirationPolicy;
-    final K key;
-    /** Guarded by "this" */
-    volatile Future<?> entryFuture;
-    /** Guarded by "this" */
-    V value;
-    /** Guarded by "this" */
-    volatile boolean scheduled;
-
-    /**
-     * Creates a new ExpiringEntry object.
-     * 
-     * @param key for the entry
-     * @param value for the entry
-     * @param expirationPolicy for the entry
-     * @param expirationNanos for the entry
-     */
-    ExpiringEntry(K key, V value, AtomicReference<ExpirationPolicy> expirationPolicy, AtomicLong expirationNanos) {
-      this.key = key;
-      this.value = value;
-      this.expirationPolicy = expirationPolicy;
-      this.expirationNanos = expirationNanos;
-      this.expectedExpiration = new AtomicLong();
-      resetExpiration();
-    }
-
-    @Override
-    public int compareTo(ExpiringEntry<K, V> other) {
-      if (key.equals(other.key))
-        return 0;
-      return expectedExpiration.get() < other.expectedExpiration.get() ? -1 : 1;
-    }
-
-    @Override
-    public int hashCode() {
-      final int prime = 31;
-      int result = 1;
-      result = prime * result + ((key == null) ? 0 : key.hashCode());
-      result = prime * result + ((value == null) ? 0 : value.hashCode());
-      return result;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj)
-        return true;
-      if (obj == null)
-        return false;
-      if (getClass() != obj.getClass())
-        return false;
-      ExpiringEntry<?, ?> other = (ExpiringEntry<?, ?>) obj;
-      if (!key.equals(other.key))
-        return false;
-      if (value == null) {
-        if (other.value != null)
-          return false;
-      } else if (!value.equals(other.value))
-        return false;
-      return true;
-    }
-
-    @Override
-    public String toString() {
-      return value.toString();
-    }
-
-    /**
-     * Marks the entry as canceled.
-     * 
-     * @return true if the entry was scheduled
-     */
-    synchronized boolean cancel() {
-      boolean result = scheduled;
-      if (entryFuture != null)
-        entryFuture.cancel(false);
-
-      entryFuture = null;
-      scheduled = false;
-      return result;
-    }
-
-    /** Gets the entry value. */
-    synchronized V getValue() {
-      return value;
-    }
-
-    /** Resets the entry's expected expiration. */
-    void resetExpiration() {
-      expectedExpiration.set(expirationNanos.get() + System.nanoTime());
-    }
-
-    /** Marks the entry as scheduled. */
-    synchronized void schedule(Future<?> entryFuture) {
-      this.entryFuture = entryFuture;
-      scheduled = true;
-    }
-
-    /** Sets the entry value. */
-    synchronized void setValue(V value) {
-      this.value = value;
-    }
-  }
-
   /**
    * Creates an ExpiringMap builder.
    * 
@@ -661,34 +553,31 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public void clear() {
-    writeLock.lock();
-    try {
-      for (ExpiringEntry<K, V> entry : entries.values())
-        entry.cancel();
-      entries.clear();
-    } finally {
-      writeLock.unlock();
-    }
+    withWriteLock(new Runnable() {
+      public void run() {
+        for (ExpiringEntry<K, V> entry : entries.values())
+          entry.cancel();
+        entries.clear();
+      }
+    });
   }
 
   @Override
-  public boolean containsKey(Object key) {
-    readLock.lock();
-    try {
-      return entries.containsKey(key);
-    } finally {
-      readLock.unlock();
-    }
+  public boolean containsKey(final Object key) {
+    return withReadLock(new LockOperation<Boolean>() {
+      public Boolean get() {
+        return entries.containsKey(key);
+      }
+    });
   }
 
   @Override
-  public boolean containsValue(Object value) {
-    readLock.lock();
-    try {
-      return entries.containsValue(value);
-    } finally {
-      readLock.unlock();
-    }
+  public boolean containsValue(final Object value) {
+    return withReadLock(new LockOperation<Boolean>() {
+      public Boolean get() {
+        return entries.containsValue(value);
+      }
+    });
   }
 
   /**
@@ -708,8 +597,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       public boolean contains(Object entry) {
         if (!(entry instanceof Map.Entry))
           return false;
-        Map.Entry<?, ?> e = (Map.Entry<?, ?>) entry;
-        return containsKey(e.getKey());
+        Map.Entry<?, ?> mapEntry = (Map.Entry<?, ?>) entry;
+        return containsKey(mapEntry.getKey());
       }
 
       @Override
@@ -726,8 +615,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       @Override
       public boolean remove(Object entry) {
         if (entry instanceof Map.Entry) {
-          Map.Entry<?, ?> e = (Map.Entry<?, ?>) entry;
-          return ExpiringMap.this.remove(e.getKey()) != null;
+          Map.Entry<?, ?> mapEntry = (Map.Entry<?, ?>) entry;
+          return ExpiringMap.this.remove(mapEntry.getKey()) != null;
         }
         return false;
       }
@@ -740,13 +629,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   }
 
   @Override
-  public boolean equals(Object obj) {
-    readLock.lock();
-    try {
-      return entries.equals(obj);
-    } finally {
-      readLock.unlock();
-    }
+  public boolean equals(final Object obj) {
+    return withReadLock(new LockOperation<Boolean>() {
+      public Boolean get() {
+        return entries.equals(obj);
+      }
+    });
   }
 
   @Override
@@ -754,12 +642,17 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   public V get(Object key) {
     ExpiringEntry<K, V> entry = getEntry(key);
 
-    if (entry == null) {
+    if (entry == null)
       return load((K) key);
-    } else if (ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get()))
+
+    if (isAccessBased(entry))
       resetEntry(entry, false);
 
     return entry.getValue();
+  }
+
+  private boolean isAccessBased(ExpiringEntry<K, V> entry) {
+    return ExpirationPolicy.ACCESSED.equals(entry.expirationPolicy.get());
   }
 
   private V load(K key) {
@@ -783,7 +676,8 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
           put(key, null);
           return null;
         } else {
-          long duration = expiringValue.getTimeUnit() == null ? expirationNanos.get() : expiringValue.getDuration();
+          long duration = expiringValue.getTimeUnit() == null ? defaultExpirationDurationNanos.get()
+              : expiringValue.getDuration();
           TimeUnit timeUnit = expiringValue.getTimeUnit() == null ? TimeUnit.NANOSECONDS : expiringValue.getTimeUnit();
           put(key, expiringValue.getValue(), expiringValue.getExpirationPolicy() == null ? expirationPolicy.get()
               : expiringValue.getExpirationPolicy(), duration, timeUnit);
@@ -801,7 +695,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @return The expiration duration (milliseconds)
    */
   public long getExpiration() {
-    return TimeUnit.NANOSECONDS.toMillis(expirationNanos.get());
+    return TimeUnit.NANOSECONDS.toMillis(defaultExpirationDurationNanos.get());
   }
 
   /**
@@ -862,22 +756,20 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public int hashCode() {
-    readLock.lock();
-    try {
-      return entries.hashCode();
-    } finally {
-      readLock.unlock();
-    }
+    return withReadLock(new LockOperation<Integer>() {
+      public Integer get() {
+        return entries.hashCode();
+      }
+    });
   }
 
   @Override
   public boolean isEmpty() {
-    readLock.lock();
-    try {
-      return entries.isEmpty();
-    } finally {
-      readLock.unlock();
-    }
+    return withReadLock(new LockOperation<Boolean>() {
+      public Boolean get() {
+        return entries.isEmpty();
+      }
+    });
   }
 
   /**
@@ -931,16 +823,20 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @throws NullPointerException if {@code key} is null
    */
   @Override
-  public V put(K key, V value) {
+  public V put(final K key, final V value) {
     Assert.notNull(key, "key");
-    return putInternal(key, value, expirationPolicy.get(), expirationNanos.get());
+    return withWriteLock(new LockOperation<V>() {
+      public V get() {
+        return putInternal(key, value, expirationPolicy.get(), defaultExpirationDurationNanos.get());
+      }
+    });
   }
 
   /**
    * @see #put(Object, Object, ExpirationPolicy, long, TimeUnit)
    */
   public V put(K key, V value, ExpirationPolicy expirationPolicy) {
-    return put(key, value, expirationPolicy, expirationNanos.get(), TimeUnit.NANOSECONDS);
+    return put(key, value, expirationPolicy, defaultExpirationDurationNanos.get(), TimeUnit.NANOSECONDS);
   }
 
   /**
@@ -962,18 +858,23 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * @throws UnsupportedOperationException If variable expiration is not enabled
    * @throws NullPointerException if {@code key}, {@code expirationPolicy} or {@code timeUnit} are null
    */
-  public V put(K key, V value, ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
+  public V put(final K key, final V value, final ExpirationPolicy expirationPolicy, long duration, TimeUnit timeUnit) {
     Assert.notNull(key, "key");
     Assert.notNull(expirationPolicy, "expirationPolicy");
     Assert.notNull(timeUnit, "timeUnit");
     Assert.operation(variableExpiration, "Variable expiration is not enabled");
-    return putInternal(key, value, expirationPolicy, TimeUnit.NANOSECONDS.convert(duration, timeUnit));
+    final long expirationNanos = TimeUnit.NANOSECONDS.convert(duration, timeUnit);
+    return withWriteLock(new LockOperation<V>() {
+      public V get() {
+        return putInternal(key, value, expirationPolicy, expirationNanos);
+      }
+    });
   }
 
   @Override
   public void putAll(Map<? extends K, ? extends V> map) {
     Assert.notNull(map, "map");
-    long expiration = expirationNanos.get();
+    long expiration = defaultExpirationDurationNanos.get();
     ExpirationPolicy expirationPolicy = this.expirationPolicy.get();
     writeLock.lock();
     try {
@@ -990,7 +891,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     writeLock.lock();
     try {
       if (!entries.containsKey(key))
-        return putInternal(key, value, expirationPolicy.get(), expirationNanos.get());
+        return putInternal(key, value, expirationPolicy.get(), defaultExpirationDurationNanos.get());
       else
         return entries.get(key).getValue();
     } finally {
@@ -1007,7 +908,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       if (entry == null)
         return null;
       if (entry.cancel())
-        scheduleEntry(entries.first());
+        scheduleEntry(entries.getNextToExpire());
       return entry.getValue();
     } finally {
       writeLock.unlock();
@@ -1023,7 +924,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       if (entry != null && entry.getValue().equals(value)) {
         entries.remove(key);
         if (entry.cancel())
-          scheduleEntry(entries.first());
+          scheduleEntry(entries.getNextToExpire());
         return true;
       } else
         return false;
@@ -1038,7 +939,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     writeLock.lock();
     try {
       if (entries.containsKey(key)) {
-        return putInternal(key, value, expirationPolicy.get(), expirationNanos.get());
+        return putInternal(key, value, expirationPolicy.get(), defaultExpirationDurationNanos.get());
       } else
         return null;
     } finally {
@@ -1053,7 +954,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
       if (entry != null && entry.getValue().equals(oldValue)) {
-        putInternal(key, newValue, expirationPolicy.get(), expirationNanos.get());
+        putInternal(key, newValue, expirationPolicy.get(), defaultExpirationDurationNanos.get());
         return true;
       } else
         return false;
@@ -1144,7 +1045,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   public void setExpiration(long duration, TimeUnit timeUnit) {
     Assert.notNull(timeUnit, "timeUnit");
     Assert.operation(variableExpiration, "Variable expiration is not enabled");
-    expirationNanos.set(TimeUnit.NANOSECONDS.convert(duration, timeUnit));
+    defaultExpirationDurationNanos.set(TimeUnit.NANOSECONDS.convert(duration, timeUnit));
   }
 
   /**
@@ -1188,22 +1089,20 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
 
   @Override
   public int size() {
-    readLock.lock();
-    try {
-      return entries.size();
-    } finally {
-      readLock.unlock();
-    }
+    return withReadLock(new LockOperation<Integer>() {
+      public Integer get() {
+        return entries.size();
+      }
+    });
   }
 
   @Override
   public String toString() {
-    readLock.lock();
-    try {
-      return entries.toString();
-    } finally {
-      readLock.unlock();
-    }
+    return withReadLock(new LockOperation<String>() {
+      public String get() {
+        return entries.toString();
+      }
+    });
   }
 
   /**
@@ -1272,13 +1171,12 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
   /**
    * Returns the internal ExpiringEntry for the {@code key}, obtaining a read lock.
    */
-  ExpiringEntry<K, V> getEntry(Object key) {
-    readLock.lock();
-    try {
-      return entries.get(key);
-    } finally {
-      readLock.unlock();
-    }
+  ExpiringEntry<K, V> getEntry(final Object key) {
+    return withReadLock(new LockOperation<ExpiringEntry<K, V>>() {
+      public ExpiringEntry<K, V> get() {
+        return entries.get(key);
+      }
+    });
   }
 
   /**
@@ -1286,37 +1184,39 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
    * for the given key, it is first cancelled and the entries reordered to reflect the new expiration.
    */
   V putInternal(K key, V value, ExpirationPolicy expirationPolicy, long expirationNanos) {
-    writeLock.lock();
-    try {
-      ExpiringEntry<K, V> entry = entries.get(key);
-      V oldValue = null;
+    ExpiringEntry<K, V> entry = entries.get(key);
+    if (entry == null)
+      return createAndScheduleEntry(key, value, expirationPolicy, expirationNanos);
 
-      if (entry == null) {
-        entry = new ExpiringEntry<K, V>(key, value,
-            variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy) : this.expirationPolicy,
-            variableExpiration ? new AtomicLong(expirationNanos) : this.expirationNanos);
-        if (entries.size() >= maxSize) {
-          ExpiringEntry<K, V> expiredEntry = entries.first();
-          entries.remove(expiredEntry.key);
-          notifyListeners(expiredEntry);
-        }
-        entries.put(key, entry);
-        if (entries.size() == 1 || entries.first().equals(entry))
-          scheduleEntry(entry);
-      } else {
-        oldValue = entry.getValue();
-        if (!ExpirationPolicy.ACCESSED.equals(expirationPolicy)
-            && ((oldValue == null && value == null) || (oldValue != null && oldValue.equals(value))))
-          return value;
+    return updateExistingEntry(entry, value, expirationPolicy);
+  }
 
-        entry.setValue(value);
-        resetEntry(entry, false);
-      }
+  private V createAndScheduleEntry(K key, V value, ExpirationPolicy expirationPolicy, long expirationNanos) {
+    ExpiringEntry<K, V> entry = new ExpiringEntry<K, V>(key, value,
+        variableExpiration ? new AtomicReference<ExpirationPolicy>(expirationPolicy) : this.expirationPolicy,
+        variableExpiration ? new AtomicLong(expirationNanos) : defaultExpirationDurationNanos);
 
-      return oldValue;
-    } finally {
-      writeLock.unlock();
+    if (entries.size() >= maxSize) {
+      ExpiringEntry<K, V> expiredEntry = entries.getNextToExpire();
+      entries.remove(expiredEntry.key);
+      notifyListeners(expiredEntry);
     }
+
+    entries.put(key, entry);
+    if (entries.size() == 1 || entries.getNextToExpire().equals(entry))
+      scheduleEntry(entry);
+    return null;
+  }
+
+  private V updateExistingEntry(ExpiringEntry<K, V> entry, V value, ExpirationPolicy expirationPolicy) {
+    V oldValue = entry.getValue();
+    if (!ExpirationPolicy.ACCESSED.equals(expirationPolicy)
+        && ((oldValue == null && value == null) || (oldValue != null && oldValue.equals(value))))
+      return value;
+
+    entry.setValue(value);
+    resetEntry(entry, false);
+    return oldValue;
   }
 
   /**
@@ -1334,7 +1234,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
       entries.reorder(entry);
 
       if (scheduled || scheduleFirstEntry)
-        scheduleEntry(entries.first());
+        scheduleEntry(entries.getNextToExpire());
     } finally {
       writeLock.unlock();
     }
@@ -1414,6 +1314,37 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
         throw new UnsupportedOperationException();
       }
     };
+  }
+
+  private <T> T withReadLock(LockOperation<T> operation) {
+    readLock.lock();
+    try {
+      return operation.get();
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  private <T> T withWriteLock(LockOperation<T> operation) {
+    writeLock.lock();
+    try {
+      return operation.get();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  private void withWriteLock(Runnable operation) {
+    writeLock.lock();
+    try {
+      operation.run();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  private interface LockOperation<T> {
+    T get();
   }
 
   private void initListenerService() {
