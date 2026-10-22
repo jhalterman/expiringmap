@@ -177,6 +177,43 @@ public class ExpiringMapTest {
     assertEquals(map.get("test"), null);
   }
 
+  public void testConditionalRemoveWithNullValue() {
+    for (boolean variableExpiration : new boolean[] {false, true}) {
+      ExpiringMap<String, String> map = variableExpiration
+          ? ExpiringMap.builder().variableExpiration().build() : ExpiringMap.create();
+      map.put("key", null);
+
+      assertFalse(map.remove("missing", null));
+      assertFalse(map.remove("key", "other"));
+      assertTrue(map.containsKey("key"));
+      assertTrue(map.remove("key", null));
+      assertFalse(map.containsKey("key"));
+
+      map.put("key", "value");
+      assertFalse(map.remove("key", null));
+      assertEquals(map.get("key"), "value");
+    }
+  }
+
+  public void testConditionalReplaceWithNullValue() {
+    for (boolean variableExpiration : new boolean[] {false, true}) {
+      ExpiringMap<String, String> map = variableExpiration
+          ? ExpiringMap.builder().variableExpiration().build() : ExpiringMap.create();
+      map.put("key", null);
+
+      assertFalse(map.replace("missing", null, "updated"));
+      assertFalse(map.replace("key", "other", "updated"));
+      assertTrue(map.containsKey("key"));
+      assertNull(map.get("key"));
+      assertTrue(map.replace("key", null, "updated"));
+      assertFalse(map.replace("key", null, "other"));
+      assertEquals(map.get("key"), "updated");
+      assertTrue(map.replace("key", "updated", null));
+      assertTrue(map.containsKey("key"));
+      assertNull(map.get("key"));
+    }
+  }
+
   /**
    * Asserts that putting an entry with an existing key reschedules its expiration.
    */

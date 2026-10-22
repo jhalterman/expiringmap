@@ -1020,7 +1020,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     writeLock.lock();
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
-      if (entry != null && entry.getValue().equals(value)) {
+      if (entry != null && (entry.getValue() == null ? value == null : entry.getValue().equals(value))) {
         entries.remove(key);
         if (entry.cancel())
           scheduleEntry(entries.first());
@@ -1052,7 +1052,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
     writeLock.lock();
     try {
       ExpiringEntry<K, V> entry = entries.get(key);
-      if (entry != null && entry.getValue().equals(oldValue)) {
+      if (entry != null && (entry.getValue() == null ? oldValue == null : entry.getValue().equals(oldValue))) {
         putInternal(key, newValue, expirationPolicy.get(), expirationNanos.get());
         return true;
       } else
