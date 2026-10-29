@@ -1297,7 +1297,7 @@ public class ExpiringMap<K, V> implements ConcurrentMap<K, V> {
             variableExpiration ? new AtomicLong(expirationNanos) : this.expirationNanos);
         if (entries.size() >= maxSize) {
           ExpiringEntry<K, V> expiredEntry = entries.first();
-          entries.remove(expiredEntry.key);
+          remove(expiredEntry.key);
           notifyListeners(expiredEntry);
         }
         entries.put(key, entry);

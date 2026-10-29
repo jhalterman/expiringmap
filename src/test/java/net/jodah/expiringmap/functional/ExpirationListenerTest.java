@@ -1,5 +1,6 @@
 package net.jodah.expiringmap.functional;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -131,7 +132,7 @@ public class ExpirationListenerTest {
     @Test(priority = 1)
     public void shouldExpireAllWhenAsyncListenerAddedOnMap() throws Throwable {
         CountDownLatch latch = new CountDownLatch(10);
-        Set<Integer> expiredKeys = new HashSet<>();
+        Set<Integer> expiredKeys = Collections.synchronizedSet(new HashSet<Integer>());
 
         ExpiringMap<Integer, Integer> map = ExpiringMap.builder()
                 .expiration(100, TimeUnit.MILLISECONDS)
